@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block title %}北京故宫文物{% endblock %}
+{% block content %}
+<h2>北京故宫文物列表</h2>
+{% if current_user.role == 'admin' %}
+    <a href="{{ url_for('add_artifact_beijing') }}" class="btn btn-success mb-3">添加文物</a>
+{% endif %}
+<table class="table table-hover table-striped">
+    <thead class="table-primary">
+        <tr>
+            <th>ID</th>
+            <th>名称</th>
+            <th>类别</th>
+            <th>编号</th>
+            <th>朝代</th>
+            <th>图片</th>
+            <th>图案</th>
+            <th>对象类型</th>
+            <th>形式结构</th>
+            {% if current_user.role == 'admin' %}<th>操作</th>{% endif %}
+        </tr>
+    </thead>
+    <tbody>
+        {% for artifact in artifacts %}
+        <tr>
+            <td>{{ artifact.id }}</td>
+            <td>{{ artifact.name }}</td>
+            <td>{{ artifact.category.name if artifact.category else '-' }}</td>
+            <td>{{ artifact.number or '-' }}</td>
+            <td>{{ artifact.dynasty.name if artifact.dynasty else '-' }}</td>
+            <td>
+                {% if artifact.image %}
+                    <img src="{{ artifact.image.url }}" alt="文物图片" width="80" class="img-thumbnail">
+                {% else %}无{% endif %}
+            </td>
+            <td>{{ artifact.motif.name if artifact.motif else '-' }}</td>
+            <td>{{ artifact.object_type.name if artifact.object_type else '-' }}</td>
+            <td>{{ artifact.form_structure.name if artifact.form_structure else '-' }}</td>
+            {% if current_user.role == 'admin' %}
+            <td>
+                <a href="{{ url_for('edit_artifact_beijing', id=artifact.id) }}" class="btn btn-sm btn-warning">修改</a>
+                <form action="{{ url_for('delete_artifact_beijing', id=artifact.id) }}" method="post" style="display:inline;">
+                    <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('确定删除？')">删除</button>
+                </form>
+            </td>
+            {% endif %}
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% endblock %}

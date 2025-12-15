@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}导入CSV数据{% endblock %}
+{% block content %}
+<h2>导入CSV数据</h2>
+<div class="card">
+    <div class="card-body">
+        <form method="post">
+            {{ form.hidden_tag() }}
+            <div class="mb-3">
+                {{ form.type.label(class="form-label") }}
+                {{ form.type(class="form-select") }}
+            </div>
+            <div class="alert alert-info">
+                <strong>注意：</strong>系统将读取 <code>data/</code> 目录下的对应CSV文件：
+                <ul>
+                    <li>北京故宫 → beijing_artifacts.csv</li>
+                    <li>台北故宫 → taipei_artifacts.csv</li>
+                </ul>
+            </div>
+            <div class="text-center">
+                {{ form.submit(class="btn btn-danger btn-lg") }}
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

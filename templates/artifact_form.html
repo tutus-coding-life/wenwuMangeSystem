@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block content %}
+<h2>{{ title }}</h2>
+<div class="card">
+    <div class="card-body">
+        <form method="post">
+            {{ form.hidden_tag() }}
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    {{ form.name.label(class="form-label") }}
+                    {{ form.name(class="form-control") }}
+                </div>
+                <div class="col-md-6 mb-3">
+                    {{ form.category.label(class="form-label") }}
+                    {{ form.category(class="form-control") }}
+                </div>
+            </div>
+            {% if form.number is defined %}  <!-- 北京专用 -->
+            <div class="mb-3">
+                {{ form.number.label(class="form-label") }}
+                {{ form.number(class="form-control") }}
+            </div>
+            {% endif %}
+            <div class="mb-3">
+                {{ form.dynasty.label(class="form-label") }}
+                {{ form.dynasty(class="form-control") }}
+            </div>
+            {% if form.description is defined %}  <!-- 台北专用 -->
+            <div class="mb-3">
+                {{ form.description.label(class="form-label") }}
+                {{ form.description(class="form-control", rows=4) }}
+            </div>
+            {% endif %}
+            <div class="mb-3">
+                {{ form.image_url.label(class="form-label") }}
+                {{ form.image_url(class="form-control", placeholder="http://example.com/image.jpg") }}
+            </div>
+            <div class="row">
+                <div class="col-md-4 mb-3">
+                    {{ form.motif.label(class="form-label") }}
+                    {{ form.motif(class="form-control") }}
+                </div>
+                <div class="col-md-4 mb-3">
+                    {{ form.object_type.label(class="form-label") }}
+                    {{ form.object_type(class="form-control") }}
+                </div>
+                <div class="col-md-4 mb-3">
+                    {{ form.form_structure.label(class="form-label") }}
+                    {{ form.form_structure(class="form-control") }}
+                </div>
+            </div>
+            <div class="text-center">
+                {{ form.submit(class="btn btn-primary btn-lg") }}
+                <a href="{{ url_for('artifacts_beijing' if '北京' in title else 'artifacts_taipei') }}" class="btn btn-secondary btn-lg ms-3">取消</a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

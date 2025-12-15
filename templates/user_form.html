@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}{{ '添加' if not user else '修改' }}用户{% endblock %}
+{% block content %}
+<h2>{{ '添加' if not user else '修改' }}用户</h2>
+<form method="post">
+    {{ form.hidden_tag() }}
+    <div class="mb-3">
+        {{ form.username.label(class="form-label") }}
+        {{ form.username(class="form-control") }}
+    </div>
+    <div class="mb-3">
+        {{ form.password.label(class="form-label") }}
+        {{ form.password(class="form-control", placeholder="修改时留空表示不改密码") }}
+    </div>
+    <div class="mb-3">
+        {{ form.role.label(class="form-label") }}
+        {{ form.role(class="form-select") }}
+    </div>
+    {{ form.submit(class="btn btn-primary") }}
+</form>
+{% endblock %}
