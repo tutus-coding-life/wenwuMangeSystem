@@ -96,6 +96,20 @@
             <a class="page-link" href="{{ url_for('artifacts_beijing', page=pagination.next_num, per_page=request.args.get('per_page', 20)) if pagination.has_next else '#' }}">下一页</a>
         </li>
     </ul>
+    <!-- 页面跳转输入框 -->
+    <div class="d-flex justify-content-center align-items-center mt-3" 
+         data-current-page="{{ pagination.page }}"
+         data-total-pages="{{ pagination.pages }}"
+         data-per-page="{{ request.args.get('per_page', 20) }}">
+        <span class="me-2">跳转到第</span>
+        <input type="number" id="jump_page_input" class="form-control form-control-sm" 
+               style="width: 80px; text-align: center;" 
+               min="1" max="{{ pagination.pages }}" 
+               value="{{ pagination.page }}"
+               onkeypress="if(event.key === 'Enter') jumpToPage()">
+        <span class="mx-2">页</span>
+        <button class="btn btn-sm btn-primary" onclick="jumpToPage()">跳转</button>
+    </div>
 </nav>
 {% endif %}
 
@@ -104,6 +118,32 @@ function changePerPage(value) {
     const url = new URL(window.location.href);
     url.searchParams.set('per_page', value);
     url.searchParams.set('page', '1'); // 重置到第一页
+    window.location.href = url.toString();
+}
+
+function jumpToPage() {
+    const container = document.querySelector('[data-current-page]');
+    const input = document.getElementById('jump_page_input');
+    const page = parseInt(input.value);
+    const maxPage = parseInt(container.getAttribute('data-total-pages'));
+    const currentPage = parseInt(container.getAttribute('data-current-page'));
+    const perPage = container.getAttribute('data-per-page');
+    
+    if (isNaN(page) || page < 1) {
+        alert('请输入有效的页码（1-' + maxPage + '）');
+        input.value = currentPage;
+        return;
+    }
+    
+    if (page > maxPage) {
+        alert('页码不能超过总页数 ' + maxPage);
+        input.value = currentPage;
+        return;
+    }
+    
+    const url = new URL(window.location.href);
+    url.searchParams.set('page', page);
+    url.searchParams.set('per_page', perPage);
     window.location.href = url.toString();
 }
 </script>
