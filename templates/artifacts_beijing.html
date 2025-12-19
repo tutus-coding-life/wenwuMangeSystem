@@ -2,9 +2,26 @@
 {% block title %}北京故宫文物{% endblock %}
 {% block content %}
 <h2>北京故宫文物列表</h2>
-{% if current_user.role == 'admin' %}
-    <a href="{{ url_for('add_artifact_beijing') }}" class="btn btn-success mb-3">添加文物</a>
-{% endif %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <div>
+        {% if current_user.role == 'admin' %}
+            <a href="{{ url_for('add_artifact_beijing') }}" class="btn btn-success">添加文物</a>
+        {% endif %}
+    </div>
+    <div class="text-muted">
+        共 <strong>{{ pagination.total }}</strong> 条记录，当前第 <strong>{{ pagination.page }}</strong> / <strong>{{ pagination.pages }}</strong> 页
+    </div>
+    <div>
+        <label for="per_page_select" class="form-label me-2">每页显示：</label>
+        <select id="per_page_select" class="form-select form-select-sm d-inline-block" style="width: auto;" onchange="changePerPage(this.value)">
+            <option value="10" {% if request.args.get('per_page', '20') == '10' %}selected{% endif %}>10</option>
+            <option value="20" {% if request.args.get('per_page', '20') == '20' %}selected{% endif %}>20</option>
+            <option value="50" {% if request.args.get('per_page', '20') == '50' %}selected{% endif %}>50</option>
+            <option value="100" {% if request.args.get('per_page', '20') == '100' %}selected{% endif %}>100</option>
+        </select>
+    </div>
+</div>
+
 <table class="table table-hover table-striped">
     <thead class="table-primary">
         <tr>
@@ -48,4 +65,46 @@
         {% endfor %}
     </tbody>
 </table>
+
+<!-- 分页导航 -->
+{% if pagination.pages > 1 %}
+<nav aria-label="文物列表分页">
+    <ul class="pagination justify-content-center">
+        <li class="page-item {% if not pagination.has_prev %}disabled{% endif %}">
+            <a class="page-link" href="{{ url_for('artifacts_beijing', page=pagination.prev_num, per_page=request.args.get('per_page', 20)) if pagination.has_prev else '#' }}">上一页</a>
+        </li>
+        
+        {% for page_num in pagination.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
+            {% if page_num %}
+                {% if page_num == pagination.page %}
+                    <li class="page-item active">
+                        <span class="page-link">{{ page_num }}</span>
+                    </li>
+                {% else %}
+                    <li class="page-item">
+                        <a class="page-link" href="{{ url_for('artifacts_beijing', page=page_num, per_page=request.args.get('per_page', 20)) }}">{{ page_num }}</a>
+                    </li>
+                {% endif %}
+            {% else %}
+                <li class="page-item disabled">
+                    <span class="page-link">…</span>
+                </li>
+            {% endif %}
+        {% endfor %}
+        
+        <li class="page-item {% if not pagination.has_next %}disabled{% endif %}">
+            <a class="page-link" href="{{ url_for('artifacts_beijing', page=pagination.next_num, per_page=request.args.get('per_page', 20)) if pagination.has_next else '#' }}">下一页</a>
+        </li>
+    </ul>
+</nav>
+{% endif %}
+
+<script>
+function changePerPage(value) {
+    const url = new URL(window.location.href);
+    url.searchParams.set('per_page', value);
+    url.searchParams.set('page', '1'); // 重置到第一页
+    window.location.href = url.toString();
+}
+</script>
 {% endblock %}

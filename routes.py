@@ -1,5 +1,6 @@
 from flask import render_template, redirect, url_for, flash, request
 from flask_login import login_user, logout_user, current_user, login_required
+from sqlalchemy.orm import joinedload
 from app import app
 from models import (
     db, User, ArtifactBeijing, ArtifactTaipei, Log,
@@ -76,8 +77,30 @@ def edit_profile():
 @app.route('/artifacts_beijing')
 @login_required
 def artifacts_beijing():
-    artifacts = ArtifactBeijing.query.all()
-    return render_template('artifacts_beijing.html', artifacts=artifacts)
+    # 获取分页参数，默认为第1页，每页20条
+    page = request.args.get('page', 1, type=int)
+    per_page = request.args.get('per_page', 20, type=int)
+    
+    # 使用eager loading优化查询，避免N+1问题
+    query = ArtifactBeijing.query.options(
+        joinedload(ArtifactBeijing.category),
+        joinedload(ArtifactBeijing.dynasty),
+        joinedload(ArtifactBeijing.image),
+        joinedload(ArtifactBeijing.motif),
+        joinedload(ArtifactBeijing.object_type),
+        joinedload(ArtifactBeijing.form_structure)
+    )
+    
+    # 分页查询
+    pagination = query.paginate(
+        page=page,
+        per_page=per_page,
+        error_out=False
+    )
+    
+    return render_template('artifacts_beijing.html', 
+                         artifacts=pagination.items,
+                         pagination=pagination)
 
 @app.route('/admin/add_artifact_beijing', methods=['GET', 'POST'])
 @login_required
@@ -168,8 +191,30 @@ def delete_artifact_beijing(id):
 @app.route('/artifacts_taipei')
 @login_required
 def artifacts_taipei():
-    artifacts = ArtifactTaipei.query.all()
-    return render_template('artifacts_taipei.html', artifacts=artifacts)
+    # 获取分页参数，默认为第1页，每页20条
+    page = request.args.get('page', 1, type=int)
+    per_page = request.args.get('per_page', 20, type=int)
+    
+    # 使用eager loading优化查询，避免N+1问题
+    query = ArtifactTaipei.query.options(
+        joinedload(ArtifactTaipei.category),
+        joinedload(ArtifactTaipei.dynasty),
+        joinedload(ArtifactTaipei.image),
+        joinedload(ArtifactTaipei.motif),
+        joinedload(ArtifactTaipei.object_type),
+        joinedload(ArtifactTaipei.form_structure)
+    )
+    
+    # 分页查询
+    pagination = query.paginate(
+        page=page,
+        per_page=per_page,
+        error_out=False
+    )
+    
+    return render_template('artifacts_taipei.html', 
+                         artifacts=pagination.items,
+                         pagination=pagination)
 
 @app.route('/admin/add_artifact_taipei', methods=['GET', 'POST'])
 @login_required
