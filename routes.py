@@ -81,6 +81,11 @@ def artifacts_beijing():
     page = request.args.get('page', 1, type=int)
     per_page = request.args.get('per_page', 20, type=int)
     
+    # 获取搜索参数
+    search_name = request.args.get('search_name', '').strip()
+    search_category = request.args.get('search_category', '').strip()
+    search_dynasty = request.args.get('search_dynasty', '').strip()
+    
     # 使用eager loading优化查询，避免N+1问题
     query = ArtifactBeijing.query.options(
         joinedload(ArtifactBeijing.category),
@@ -91,6 +96,14 @@ def artifacts_beijing():
         joinedload(ArtifactBeijing.form_structure)
     )
     
+    # 应用搜索条件
+    if search_name:
+        query = query.filter(ArtifactBeijing.name.like(f'%{search_name}%'))
+    if search_category:
+        query = query.join(Category).filter(Category.name.like(f'%{search_category}%'))
+    if search_dynasty:
+        query = query.join(Dynasty).filter(Dynasty.name.like(f'%{search_dynasty}%'))
+    
     # 分页查询
     pagination = query.paginate(
         page=page,
@@ -98,9 +111,18 @@ def artifacts_beijing():
         error_out=False
     )
     
+    # 获取所有类别和朝代用于搜索下拉框
+    categories = Category.query.order_by(Category.name).all()
+    dynasties = Dynasty.query.order_by(Dynasty.name).all()
+    
     return render_template('artifacts_beijing.html', 
                          artifacts=pagination.items,
-                         pagination=pagination)
+                         pagination=pagination,
+                         categories=categories,
+                         dynasties=dynasties,
+                         search_name=search_name,
+                         search_category=search_category,
+                         search_dynasty=search_dynasty)
 
 @app.route('/admin/add_artifact_beijing', methods=['GET', 'POST'])
 @login_required
@@ -195,6 +217,11 @@ def artifacts_taipei():
     page = request.args.get('page', 1, type=int)
     per_page = request.args.get('per_page', 20, type=int)
     
+    # 获取搜索参数
+    search_name = request.args.get('search_name', '').strip()
+    search_category = request.args.get('search_category', '').strip()
+    search_dynasty = request.args.get('search_dynasty', '').strip()
+    
     # 使用eager loading优化查询，避免N+1问题
     query = ArtifactTaipei.query.options(
         joinedload(ArtifactTaipei.category),
@@ -205,6 +232,14 @@ def artifacts_taipei():
         joinedload(ArtifactTaipei.form_structure)
     )
     
+    # 应用搜索条件
+    if search_name:
+        query = query.filter(ArtifactTaipei.name.like(f'%{search_name}%'))
+    if search_category:
+        query = query.join(Category).filter(Category.name.like(f'%{search_category}%'))
+    if search_dynasty:
+        query = query.join(Dynasty).filter(Dynasty.name.like(f'%{search_dynasty}%'))
+    
     # 分页查询
     pagination = query.paginate(
         page=page,
@@ -212,9 +247,18 @@ def artifacts_taipei():
         error_out=False
     )
     
+    # 获取所有类别和朝代用于搜索下拉框
+    categories = Category.query.order_by(Category.name).all()
+    dynasties = Dynasty.query.order_by(Dynasty.name).all()
+    
     return render_template('artifacts_taipei.html', 
                          artifacts=pagination.items,
-                         pagination=pagination)
+                         pagination=pagination,
+                         categories=categories,
+                         dynasties=dynasties,
+                         search_name=search_name,
+                         search_category=search_category,
+                         search_dynasty=search_dynasty)
 
 @app.route('/admin/add_artifact_taipei', methods=['GET', 'POST'])
 @login_required

@@ -2,6 +2,56 @@
 {% block title %}北京故宫文物{% endblock %}
 {% block content %}
 <h2>北京故宫文物列表</h2>
+
+<!-- 搜索表单 -->
+<div class="card mb-3">
+    <div class="card-body">
+        <form method="GET" action="{{ url_for('artifacts_beijing') }}" class="row g-3">
+            <div class="col-md-4">
+                <label for="search_name" class="form-label">文物名称</label>
+                <input type="text" class="form-control" id="search_name" name="search_name" 
+                       value="{{ search_name }}" placeholder="输入文物名称">
+            </div>
+            <div class="col-md-3">
+                <label for="search_category" class="form-label">类别</label>
+                <select class="form-select" id="search_category" name="search_category">
+                    <option value="">全部类别</option>
+                    {% for cat in categories %}
+                        <option value="{{ cat.name }}" {% if search_category == cat.name %}selected{% endif %}>
+                            {{ cat.name }}
+                        </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label for="search_dynasty" class="form-label">朝代</label>
+                <select class="form-select" id="search_dynasty" name="search_dynasty">
+                    <option value="">全部朝代</option>
+                    {% for dyn in dynasties %}
+                        <option value="{{ dyn.name }}" {% if search_dynasty == dyn.name %}selected{% endif %}>
+                            {{ dyn.name }}
+                        </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-2 d-flex align-items-end">
+                <button type="submit" class="btn btn-primary w-100">搜索</button>
+            </div>
+        </form>
+        {% if search_name or search_category or search_dynasty %}
+        <div class="mt-2">
+            <a href="{{ url_for('artifacts_beijing') }}" class="btn btn-sm btn-outline-secondary">清除搜索</a>
+            <span class="text-muted ms-2">
+                搜索条件：
+                {% if search_name %}<span class="badge bg-info">名称: {{ search_name }}</span>{% endif %}
+                {% if search_category %}<span class="badge bg-info">类别: {{ search_category }}</span>{% endif %}
+                {% if search_dynasty %}<span class="badge bg-info">朝代: {{ search_dynasty }}</span>{% endif %}
+            </span>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
 <div class="d-flex justify-content-between align-items-center mb-3">
     <div>
         {% if current_user.role == 'admin' %}
@@ -71,7 +121,7 @@
 <nav aria-label="文物列表分页">
     <ul class="pagination justify-content-center">
         <li class="page-item {% if not pagination.has_prev %}disabled{% endif %}">
-            <a class="page-link" href="{{ url_for('artifacts_beijing', page=pagination.prev_num, per_page=request.args.get('per_page', 20)) if pagination.has_prev else '#' }}">上一页</a>
+            <a class="page-link" href="{{ url_for('artifacts_beijing', page=pagination.prev_num, per_page=request.args.get('per_page', 20), search_name=search_name, search_category=search_category, search_dynasty=search_dynasty) if pagination.has_prev else '#' }}">上一页</a>
         </li>
         
         {% for page_num in pagination.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
@@ -82,7 +132,7 @@
                     </li>
                 {% else %}
                     <li class="page-item">
-                        <a class="page-link" href="{{ url_for('artifacts_beijing', page=page_num, per_page=request.args.get('per_page', 20)) }}">{{ page_num }}</a>
+                        <a class="page-link" href="{{ url_for('artifacts_beijing', page=page_num, per_page=request.args.get('per_page', 20), search_name=search_name, search_category=search_category, search_dynasty=search_dynasty) }}">{{ page_num }}</a>
                     </li>
                 {% endif %}
             {% else %}
@@ -93,14 +143,17 @@
         {% endfor %}
         
         <li class="page-item {% if not pagination.has_next %}disabled{% endif %}">
-            <a class="page-link" href="{{ url_for('artifacts_beijing', page=pagination.next_num, per_page=request.args.get('per_page', 20)) if pagination.has_next else '#' }}">下一页</a>
+            <a class="page-link" href="{{ url_for('artifacts_beijing', page=pagination.next_num, per_page=request.args.get('per_page', 20), search_name=search_name, search_category=search_category, search_dynasty=search_dynasty) if pagination.has_next else '#' }}">下一页</a>
         </li>
     </ul>
     <!-- 页面跳转输入框 -->
     <div class="d-flex justify-content-center align-items-center mt-3" 
          data-current-page="{{ pagination.page }}"
          data-total-pages="{{ pagination.pages }}"
-         data-per-page="{{ request.args.get('per_page', 20) }}">
+         data-per-page="{{ request.args.get('per_page', 20) }}"
+         data-search-name="{{ search_name }}"
+         data-search-category="{{ search_category }}"
+         data-search-dynasty="{{ search_dynasty }}">
         <span class="me-2">跳转到第</span>
         <input type="number" id="jump_page_input" class="form-control form-control-sm" 
                style="width: 80px; text-align: center;" 
@@ -128,6 +181,9 @@ function jumpToPage() {
     const maxPage = parseInt(container.getAttribute('data-total-pages'));
     const currentPage = parseInt(container.getAttribute('data-current-page'));
     const perPage = container.getAttribute('data-per-page');
+    const searchName = container.getAttribute('data-search-name') || '';
+    const searchCategory = container.getAttribute('data-search-category') || '';
+    const searchDynasty = container.getAttribute('data-search-dynasty') || '';
     
     if (isNaN(page) || page < 1) {
         alert('请输入有效的页码（1-' + maxPage + '）');
@@ -144,6 +200,9 @@ function jumpToPage() {
     const url = new URL(window.location.href);
     url.searchParams.set('page', page);
     url.searchParams.set('per_page', perPage);
+    if (searchName) url.searchParams.set('search_name', searchName);
+    if (searchCategory) url.searchParams.set('search_category', searchCategory);
+    if (searchDynasty) url.searchParams.set('search_dynasty', searchDynasty);
     window.location.href = url.toString();
 }
 </script>
