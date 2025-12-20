@@ -127,6 +127,22 @@
                                 <div class='mt-2 small'>
                                     <div><strong>类别：</strong> {{ artifact.category.name if artifact.category else '—' }}</div>
                                     <div><strong>朝代：</strong> {{ artifact.dynasty.name if artifact.dynasty else '—' }}</div>
+                                    <div><strong>位置：</strong>
+                                        {% if artifact.location %}
+                                            {% if artifact.location.storage_room %}
+                                                库房 - {{ artifact.location.storage_room.position }}
+                                                {% if artifact.location.exhibition_hall %}
+                                                    / 展厅 - {{ artifact.location.exhibition_hall.position }}
+                                                {% endif %}
+                                            {% elif artifact.location.exhibition_hall %}
+                                                展厅 - {{ artifact.location.exhibition_hall.position }}
+                                            {% else %}
+                                                未知位置
+                                            {% endif %}
+                                        {% else %}
+                                            —
+                                        {% endif %}
+                                    </div>
                                     <div><strong>图案：</strong> {{ artifact.motif.name if artifact.motif else '—' }}</div>
                                     <div><strong>对象类型：</strong> {{ artifact.object_type.name if artifact.object_type else '—' }}</div>
                                     <div><strong>形式结构：</strong> {{ artifact.form_structure.name if artifact.form_structure else '—' }}</div>
@@ -154,6 +170,22 @@
                             <div class="text-muted small flex-grow-1">
                                 <div><strong>类别：</strong>{{ artifact.category.name if artifact.category else '—' }}</div>
                                 <div><strong>朝代：</strong>{{ artifact.dynasty.name if artifact.dynasty else '—' }}</div>
+                                <div><strong>位置：</strong>
+                                    {% if artifact.location %}
+                                        {% if artifact.location.storage_room %}
+                                            库房 - {{ artifact.location.storage_room.position }}
+                                            {% if artifact.location.exhibition_hall %}
+                                                / 展厅 - {{ artifact.location.exhibition_hall.position }}
+                                            {% endif %}
+                                        {% elif artifact.location.exhibition_hall %}
+                                            展厅 - {{ artifact.location.exhibition_hall.position }}
+                                        {% else %}
+                                            未知位置
+                                        {% endif %}
+                                    {% else %}
+                                        —
+                                    {% endif %}
+                                </div>
                                 {% if artifact.description %}
                                 <div class="mt-2 text-truncate">{{ artifact.description|truncate(60) }}</div>
                                 {% endif %}

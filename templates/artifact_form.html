@@ -43,6 +43,57 @@
                 <div class="form-text">输入图片完整URL，支持 JPG、PNG 等格式（可选）</div>
             </div>
 
+            <div class="mb-3">
+                {{ form.location_mode.label(class="form-label") }}
+                {{ form.location_mode(class="form-select", id='location_mode') }}
+                <div class="form-text">请选择使用已有位置或新建位置</div>
+            </div>
+
+            <div class="mb-3">
+                <div class="existing-location">
+                    {{ form.existing_location_id.label(class="form-label") }}
+                    {{ form.existing_location_id(class="form-select", id='existing_location_id') }}
+                </div>
+                <div class="form-text">当选择“使用已有位置”时，从此处选择</div>
+            </div>
+
+            <hr>
+            <h5>新建位置（选填，若选择“新建位置”请至少填写一项）</h5>
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <div class="new-location">
+                        {{ form.new_storage_name.label(class="form-label") }}
+                        {{ form.new_storage_name(class="form-control", placeholder="库房名称，例如：库房 A - L1", id='new_storage_name') }}
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="new-location">
+                        {{ form.new_exhibition_name.label(class="form-label") }}
+                        {{ form.new_exhibition_name(class="form-control", placeholder="展厅名称，例如：一号展厅 - 东厅", id='new_exhibition_name') }}
+                    </div>
+                </div>
+            </div>
+            <div class="form-text mt-2">若选择新建位置，系统会根据填写的库房/展厅名称自动新建对应记录并建立 Location。</div>
+            <script>
+                function toggleLocationFields(){
+                    const mode = document.querySelector('#location_mode').value;
+                    const existing = document.querySelectorAll('.existing-location');
+                    const newloc = document.querySelectorAll('.new-location');
+                    if(mode === 'existing'){
+                        existing.forEach(e => e.style.display = 'block');
+                        newloc.forEach(e => e.style.display = 'none');
+                    } else {
+                        existing.forEach(e => e.style.display = 'none');
+                        newloc.forEach(e => e.style.display = 'block');
+                    }
+                }
+                document.addEventListener('DOMContentLoaded', function(){
+                    const sel = document.querySelector('#location_mode');
+                    sel.addEventListener('change', toggleLocationFields);
+                    toggleLocationFields();
+                });
+            </script>
+
             <div class="row">
                 <div class="col-md-4 mb-3">
                     {{ form.motif.label(class="form-label") }}

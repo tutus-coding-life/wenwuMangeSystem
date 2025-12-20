@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block content %}
+<h2>{{ title }}</h2>
+<form method="post">
+    {{ form.hidden_tag() }}
+
+    <div class="mb-3">
+        {{ form.type.label(class="form-label") }}
+        {{ form.type(class="form-select") }}
+    </div>
+
+    <div class="mb-3">
+        {{ form.storage_room_id.label(class="form-label") }}
+        {{ form.storage_room_id(class="form-select") }}
+        <div class="form-text">当类型为库房时，选择对应的库房（可不选）</div>
+    </div>
+
+    <div class="mb-3">
+        {{ form.exhibition_hall_id.label(class="form-label") }}
+        {{ form.exhibition_hall_id(class="form-select") }}
+        <div class="form-text">当类型为展厅时，选择对应展厅（可不选）</div>
+    </div>
+
+    {{ form.submit(class="btn btn-primary") }}
+</form>
+
+{% endblock %}

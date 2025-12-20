@@ -51,6 +51,44 @@ class Image(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     url = db.Column(db.String(256), nullable=False)
 
+
+# 仓储/展厅位置相关表
+class StorageRoom(db.Model):
+    __tablename__ = 'storage_room'
+    id = db.Column(db.Integer, primary_key=True)
+    position = db.Column(db.String(256), nullable=False)  # 库房位置说明
+
+    def __repr__(self):
+        return f'<StorageRoom {self.position}>'
+
+
+class ExhibitionHall(db.Model):
+    __tablename__ = 'exhibition_hall'
+    id = db.Column(db.Integer, primary_key=True)
+    position = db.Column(db.String(256), nullable=False)  # 展厅位置说明
+
+    def __repr__(self):
+        return f'<ExhibitionHall {self.position}>'
+
+
+class Location(db.Model):
+    __tablename__ = 'location'
+    id = db.Column(db.Integer, primary_key=True)
+    # 可指向库房或展厅中的一处；两者只能选其一
+    storage_room_id = db.Column(db.Integer, db.ForeignKey('storage_room.id', ondelete='SET NULL'), nullable=True)
+    exhibition_hall_id = db.Column(db.Integer, db.ForeignKey('exhibition_hall.id', ondelete='SET NULL'), nullable=True)
+    type = db.Column(db.String(32), nullable=False)  # 'storage' 或 'exhibition'
+
+    storage_room = db.relationship('StorageRoom', backref='locations')
+    exhibition_hall = db.relationship('ExhibitionHall', backref='locations')
+
+    def __repr__(self):
+        if self.type == 'storage' and self.storage_room:
+            return f'<Location storage:{self.storage_room.position}>'
+        if self.type == 'exhibition' and self.exhibition_hall:
+            return f'<Location exhibition:{self.exhibition_hall.position}>'
+        return f'<Location {self.id}>'
+
 # ==================== 博物馆表 ====================
 class Museum(db.Model):
     __tablename__ = 'museum'
@@ -86,6 +124,8 @@ class Artifact(db.Model):
     motif_id = db.Column(db.Integer, db.ForeignKey('motif_and_pattern.id', ondelete='SET NULL'))
     object_type_id = db.Column(db.Integer, db.ForeignKey('object_type.id', ondelete='SET NULL'))
     form_structure_id = db.Column(db.Integer, db.ForeignKey('form_and_structure.id', ondelete='SET NULL'))
+    # 位置引用：指向 Location（可为空）
+    location_id = db.Column(db.Integer, db.ForeignKey('location.id', ondelete='SET NULL'))
 
     # 关系
     category = db.relationship('Category', backref='artifacts')
@@ -94,6 +134,7 @@ class Artifact(db.Model):
     motif = db.relationship('MotifAndPattern', backref='artifacts')
     object_type = db.relationship('ObjectType', backref='artifacts')
     form_structure = db.relationship('FormAndStructure', backref='artifacts')
+    location = db.relationship('Location', backref='artifacts')
 
     def __repr__(self):
         return f'<Artifact {self.name} ({self.museum.name if self.museum else "未知来源"})>'
@@ -115,7 +156,7 @@ class Log(db.Model):
     
     timestamp = db.Column(db.DateTime, default=datetime.utcnow, index=True)
     # 用户被删除时RESTRICT（防止丢失操作人信息）
-    user_id = db.Column(db.Integer, db.ForeignKey('user.id', ondelete='RESTRICT'), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id', ondelete='RESTRICT'), nullable=True)
     user = db.relationship('User', backref='logs')
 
     def __repr__(self):

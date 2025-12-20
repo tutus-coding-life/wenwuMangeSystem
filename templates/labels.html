@@ -20,7 +20,7 @@ content %}
     {% for item in items %}
     <tr>
       <td>{{ item.id }}</td>
-      <td>{{ item.name }}</td>
+      <td>{{ item.name if item.name is defined else (item.position if item.position is defined else '') }}</td>
       {% if current_user.role == 'admin' %}
       <td>
         <a

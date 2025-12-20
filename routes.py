@@ -5,11 +5,12 @@ from app import app
 from models import (
     db, User, Artifact, Museum, Log,
     Category, Dynasty, Image,
-    MotifAndPattern, ObjectType, FormAndStructure
+    MotifAndPattern, ObjectType, FormAndStructure,
+    StorageRoom, ExhibitionHall, Location
 )
 from forms import (
     RegisterForm, LoginForm, EditProfileForm, UserForm,
-    ArtifactForm,  LabelForm, ImportForm
+    ArtifactForm,  LabelForm, ImportForm, LocationForm
 )
 import pandas as pd
 import os
@@ -161,6 +162,41 @@ def add_artifact(museum_id):
         obj_type = ObjectType.query.filter_by(name=form.object_type.data).first() if form.object_type.data else None
         form_struct = FormAndStructure.query.filter_by(name=form.form_structure.data).first() if form.form_structure.data else None
 
+        # 处理位置：使用已有位置或新建位置
+        chosen_location_id = None
+        if getattr(form, 'location_mode', None) and form.location_mode.data == 'existing':
+            # 使用已有位置
+            if getattr(form, 'existing_location_id', None) and form.existing_location_id.data and form.existing_location_id.data != 0:
+                chosen_location_id = form.existing_location_id.data
+        else:
+            # 新建位置：至少填写库房或展厅之一
+            new_storage = getattr(form, 'new_storage_name', None) and form.new_storage_name.data and form.new_storage_name.data.strip()
+            new_exhibition = getattr(form, 'new_exhibition_name', None) and form.new_exhibition_name.data and form.new_exhibition_name.data.strip()
+            if new_storage or new_exhibition:
+                sr_id = None
+                eh_id = None
+                if new_storage:
+                    # 查找相同名称的库房，若不存在则新建
+                    sr = StorageRoom.query.filter_by(position=new_storage.strip()).first()
+                    if not sr:
+                        sr = StorageRoom(position=new_storage.strip())
+                        db.session.add(sr)
+                        db.session.flush()
+                    sr_id = sr.id
+                if new_exhibition:
+                    eh = ExhibitionHall.query.filter_by(position=new_exhibition.strip()).first()
+                    if not eh:
+                        eh = ExhibitionHall(position=new_exhibition.strip())
+                        db.session.add(eh)
+                        db.session.flush()
+                    eh_id = eh.id
+                # 创建 Location，type 根据填写情况设置
+                loc_type = 'both' if sr_id and eh_id else ('storage' if sr_id else 'exhibition')
+                loc = Location(storage_room_id=sr_id, exhibition_hall_id=eh_id, type=loc_type)
+                db.session.add(loc)
+                db.session.flush()
+                chosen_location_id = loc.id
+
         # 创建通用 Artifact 实例
         artifact = Artifact(
             museum_id=museum_id,
@@ -171,7 +207,8 @@ def add_artifact(museum_id):
             image_id=image.id if image else None,
             motif_id=motif.id if motif else None,
             object_type_id=obj_type.id if obj_type else None,
-            form_structure_id=form_struct.id if form_struct else None
+            form_structure_id=form_struct.id if form_struct else None,
+            location_id=(chosen_location_id if chosen_location_id else None)
         )
 
         db.session.add(artifact)
@@ -201,6 +238,14 @@ def edit_artifact(museum_id, id):
 
     museum = Museum.query.get_or_404(museum_id)
     form = ArtifactForm(obj=artifact)  # 自动填充表单
+    # 在 GET 请求时填充位置相关默认值
+    if request.method == 'GET':
+        if artifact.location:
+            form.location_mode.data = 'existing'
+            form.existing_location_id.data = artifact.location_id if artifact.location_id else 0
+        else:
+            form.location_mode.data = 'existing'
+            form.existing_location_id.data = 0
 
     if form.validate_on_submit():
         _create_or_get_associated_records(form)
@@ -212,6 +257,37 @@ def edit_artifact(museum_id, id):
         obj_type = ObjectType.query.filter_by(name=form.object_type.data).first() if form.object_type.data else None
         form_struct = FormAndStructure.query.filter_by(name=form.form_structure.data).first() if form.form_structure.data else None
 
+        # 处理位置（编辑时也支持选择已有或新建）
+        chosen_location_id = None
+        if getattr(form, 'location_mode', None) and form.location_mode.data == 'existing':
+            if getattr(form, 'existing_location_id', None) and form.existing_location_id.data and form.existing_location_id.data != 0:
+                chosen_location_id = form.existing_location_id.data
+        else:
+            new_storage = getattr(form, 'new_storage_name', None) and form.new_storage_name.data and form.new_storage_name.data.strip()
+            new_exhibition = getattr(form, 'new_exhibition_name', None) and form.new_exhibition_name.data and form.new_exhibition_name.data.strip()
+            if new_storage or new_exhibition:
+                sr_id = None
+                eh_id = None
+                if new_storage:
+                    sr = StorageRoom.query.filter_by(position=new_storage.strip()).first()
+                    if not sr:
+                        sr = StorageRoom(position=new_storage.strip())
+                        db.session.add(sr)
+                        db.session.flush()
+                    sr_id = sr.id
+                if new_exhibition:
+                    eh = ExhibitionHall.query.filter_by(position=new_exhibition.strip()).first()
+                    if not eh:
+                        eh = ExhibitionHall(position=new_exhibition.strip())
+                        db.session.add(eh)
+                        db.session.flush()
+                    eh_id = eh.id
+                loc_type = 'both' if sr_id and eh_id else ('storage' if sr_id else 'exhibition')
+                loc = Location(storage_room_id=sr_id, exhibition_hall_id=eh_id, type=loc_type)
+                db.session.add(loc)
+                db.session.flush()
+                chosen_location_id = loc.id
+
         # 更新字段
         artifact.name = form.name.data
         artifact.description = form.description.data or None
@@ -221,6 +297,7 @@ def edit_artifact(museum_id, id):
         artifact.motif_id = motif.id if motif else None
         artifact.object_type_id = obj_type.id if obj_type else None
         artifact.form_structure_id = form_struct.id if form_struct else None
+        artifact.location_id = (chosen_location_id if chosen_location_id else None)
 
         db.session.commit()
 
@@ -507,6 +584,199 @@ def add_category():
         flash('类别添加成功', 'success')
         return redirect(url_for('categories'))
     return render_template('label_form.html', form=form, title='添加类别')
+
+
+# ==============================
+# 展厅管理 (ExhibitionHall)
+# ==============================
+
+@app.route('/storage_rooms')
+@login_required
+def storage_rooms():
+    if current_user.role != 'admin':
+        flash('无权限', 'error')
+        return redirect(url_for('index'))
+    items = StorageRoom.query.order_by(StorageRoom.id).all()
+    return render_template('labels.html', items=items, type='库房',
+                           add_route='add_storage_room', edit_route='edit_storage_room', delete_route='delete_storage_room')
+
+
+@app.route('/admin/add_storage_room', methods=['GET', 'POST'])
+@login_required
+def add_storage_room():
+    if current_user.role != 'admin':
+        flash('无权限', 'error')
+        return redirect(url_for('index'))
+    form = LabelForm()
+    if form.validate_on_submit():
+        item = StorageRoom(position=form.name.data)
+        db.session.add(item)
+        db.session.commit()
+        flash('库房添加成功', 'success')
+        return redirect(url_for('storage_rooms'))
+    return render_template('label_form.html', form=form, title='添加库房')
+
+
+@app.route('/admin/edit_storage_room/<int:id>', methods=['GET', 'POST'])
+@login_required
+def edit_storage_room(id):
+    if current_user.role != 'admin':
+        flash('无权限', 'error')
+        return redirect(url_for('index'))
+    item = StorageRoom.query.get_or_404(id)
+    form = LabelForm()
+    if request.method == 'GET':
+        form.name.data = item.position
+    if form.validate_on_submit():
+        item.position = form.name.data
+        db.session.commit()
+        flash('库房修改成功', 'success')
+        return redirect(url_for('storage_rooms'))
+    return render_template('label_form.html', form=form, title='修改库房')
+
+
+@app.route('/admin/delete_storage_room/<int:id>', methods=['POST'])
+@login_required
+def delete_storage_room(id):
+    if current_user.role != 'admin':
+        flash('无权限', 'error')
+        return redirect(url_for('index'))
+    item = StorageRoom.query.get_or_404(id)
+    db.session.delete(item)
+    db.session.commit()
+    flash('库房删除成功', 'success')
+    return redirect(url_for('storage_rooms'))
+
+
+# ==============================
+# 展厅管理 (ExhibitionHall)
+# ==============================
+
+@app.route('/exhibition_halls')
+@login_required
+def exhibition_halls():
+    if current_user.role != 'admin':
+        flash('无权限', 'error')
+        return redirect(url_for('index'))
+    items = ExhibitionHall.query.order_by(ExhibitionHall.id).all()
+    return render_template('labels.html', items=items, type='展厅',
+                           add_route='add_exhibition_hall', edit_route='edit_exhibition_hall', delete_route='delete_exhibition_hall')
+
+
+@app.route('/admin/add_exhibition_hall', methods=['GET', 'POST'])
+@login_required
+def add_exhibition_hall():
+    if current_user.role != 'admin':
+        flash('无权限', 'error')
+        return redirect(url_for('index'))
+    form = LabelForm()
+    if form.validate_on_submit():
+        item = ExhibitionHall(position=form.name.data)
+        db.session.add(item)
+        db.session.commit()
+        flash('展厅添加成功', 'success')
+        return redirect(url_for('exhibition_halls'))
+    return render_template('label_form.html', form=form, title='添加展厅')
+
+
+@app.route('/admin/edit_exhibition_hall/<int:id>', methods=['GET', 'POST'])
+@login_required
+def edit_exhibition_hall(id):
+    if current_user.role != 'admin':
+        flash('无权限', 'error')
+        return redirect(url_for('index'))
+    item = ExhibitionHall.query.get_or_404(id)
+    form = LabelForm()
+    if request.method == 'GET':
+        form.name.data = item.position
+    if form.validate_on_submit():
+        item.position = form.name.data
+        db.session.commit()
+        flash('展厅修改成功', 'success')
+        return redirect(url_for('exhibition_halls'))
+    return render_template('label_form.html', form=form, title='修改展厅')
+
+
+@app.route('/admin/delete_exhibition_hall/<int:id>', methods=['POST'])
+@login_required
+def delete_exhibition_hall(id):
+    if current_user.role != 'admin':
+        flash('无权限', 'error')
+        return redirect(url_for('index'))
+    item = ExhibitionHall.query.get_or_404(id)
+    db.session.delete(item)
+    db.session.commit()
+    flash('展厅删除成功', 'success')
+    return redirect(url_for('exhibition_halls'))
+
+
+# ==============================
+# 位置管理 (Location)
+# ==============================
+
+@app.route('/locations')
+@login_required
+def locations():
+    if current_user.role != 'admin':
+        flash('无权限', 'error')
+        return redirect(url_for('index'))
+    items = Location.query.order_by(Location.id).all()
+    return render_template('locations.html', items=items)
+
+
+@app.route('/admin/add_location', methods=['GET', 'POST'])
+@login_required
+def add_location():
+    if current_user.role != 'admin':
+        flash('无权限', 'error')
+        return redirect(url_for('index'))
+    form = LocationForm()
+    if form.validate_on_submit():
+        loc = Location(
+            storage_room_id=(form.storage_room_id.data if form.storage_room_id.data and form.storage_room_id.data != 0 else None),
+            exhibition_hall_id=(form.exhibition_hall_id.data if form.exhibition_hall_id.data and form.exhibition_hall_id.data != 0 else None),
+            type=form.type.data
+        )
+        db.session.add(loc)
+        db.session.commit()
+        flash('位置添加成功', 'success')
+        return redirect(url_for('locations'))
+    return render_template('location_form.html', form=form, title='添加位置')
+
+
+@app.route('/admin/edit_location/<int:id>', methods=['GET', 'POST'])
+@login_required
+def edit_location(id):
+    if current_user.role != 'admin':
+        flash('无权限', 'error')
+        return redirect(url_for('index'))
+    loc = Location.query.get_or_404(id)
+    form = LocationForm()
+    if request.method == 'GET':
+        form.type.data = loc.type
+        form.storage_room_id.data = loc.storage_room_id if loc.storage_room_id else 0
+        form.exhibition_hall_id.data = loc.exhibition_hall_id if loc.exhibition_hall_id else 0
+    if form.validate_on_submit():
+        loc.storage_room_id = (form.storage_room_id.data if form.storage_room_id.data and form.storage_room_id.data != 0 else None)
+        loc.exhibition_hall_id = (form.exhibition_hall_id.data if form.exhibition_hall_id.data and form.exhibition_hall_id.data != 0 else None)
+        loc.type = form.type.data
+        db.session.commit()
+        flash('位置修改成功', 'success')
+        return redirect(url_for('locations'))
+    return render_template('location_form.html', form=form, title='修改位置')
+
+
+@app.route('/admin/delete_location/<int:id>', methods=['POST'])
+@login_required
+def delete_location(id):
+    if current_user.role != 'admin':
+        flash('无权限', 'error')
+        return redirect(url_for('index'))
+    loc = Location.query.get_or_404(id)
+    db.session.delete(loc)
+    db.session.commit()
+    flash('位置删除成功', 'success')
+    return redirect(url_for('locations'))
 
 @app.route('/admin/edit_category/<int:id>', methods=['GET', 'POST'])
 @login_required
