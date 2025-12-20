@@ -602,6 +602,85 @@ def logs():
     return render_template('logs.html', logs=logs_list)
 
 # ==============================
+# 博物馆管理
+# ==============================
+
+@app.route('/admin/museums')
+@login_required
+def museums():
+    if current_user.role != 'admin':
+        flash('无权限访问', 'error')
+        return redirect(url_for('index'))
+    museums_list = Museum.query.order_by(Museum.name).all()
+    # 获取每个博物馆的文物数量
+    museums_with_count = []
+    for museum in museums_list:
+        artifact_count = Artifact.query.filter_by(museum_id=museum.id).count()
+        museums_with_count.append({
+            'museum': museum,
+            'artifact_count': artifact_count
+        })
+    return render_template('museums.html', museums_with_count=museums_with_count)
+
+@app.route('/admin/delete_museum/<int:id>', methods=['POST'])
+@login_required
+def delete_museum(id):
+    if current_user.role != 'admin':
+        flash('无权限', 'error')
+        return redirect(url_for('index'))
+    
+    museum = Museum.query.get_or_404(id)
+    
+    # 检查是否有文物
+    artifact_count = Artifact.query.filter_by(museum_id=id).count()
+    if artifact_count > 0:
+        flash(f'无法删除博物馆【{museum.name}】，该博物馆下还有 {artifact_count} 件文物。请先删除所有文物后再删除博物馆。', 'error')
+        return redirect(url_for('museums'))
+    
+    try:
+        db.session.delete(museum)
+        db.session.commit()
+        flash(f'博物馆【{museum.name}】删除成功', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'删除失败：{str(e)}', 'error')
+    
+    return redirect(url_for('museums'))
+
+@app.route('/admin/force_delete_museum/<int:id>', methods=['POST'])
+@login_required
+def force_delete_museum(id):
+    """强制删除博物馆（包括其下的所有文物）"""
+    if current_user.role != 'admin':
+        flash('无权限', 'error')
+        return redirect(url_for('index'))
+    
+    museum = Museum.query.get_or_404(id)
+    museum_name = museum.name
+    
+    try:
+        # 先删除该博物馆下的所有文物
+        artifacts = Artifact.query.filter_by(museum_id=id).all()
+        artifact_count = len(artifacts)
+        
+        for artifact in artifacts:
+            db.session.delete(artifact)
+        
+        # 然后删除博物馆
+        db.session.delete(museum)
+        db.session.commit()
+        
+        if artifact_count > 0:
+            flash(f'强制删除成功！已删除博物馆【{museum_name}】及其下的 {artifact_count} 件文物', 'success')
+        else:
+            flash(f'博物馆【{museum_name}】删除成功', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'强制删除失败：{str(e)}', 'error')
+    
+    return redirect(url_for('museums'))
+
+# ==============================
 # CSV 导入
 # ==============================
 
@@ -755,44 +834,66 @@ from datetime import datetime
 # 添加操作日志
 # ==============================
 
+# 临时存储待记录的日志信息
+_pending_logs = []
+
 @listens_for(db.session, 'before_flush')
 def before_flush(session, flush_context, instances):
+    """在 flush 之前收集需要记录日志的对象信息"""
     models = {Artifact, Museum, Category, Dynasty, Image, 
-                      MotifAndPattern, ObjectType, FormAndStructure, User}
+              MotifAndPattern, ObjectType, FormAndStructure, User}
+    
+    global _pending_logs
+    _pending_logs = []
+    
+    # 收集新创建的对象（此时 id 还没有，需要等到 after_flush_postexec）
+    for instance in session.new:
+        # 排除 Log 模型，避免记录日志时触发无限循环
+        if type(instance) in models and type(instance) != Log:
+            _pending_logs.append(('create', type(instance).__name__, None, instance))
+    
+    # 收集修改的对象（此时 id 已经有了）
+    for instance in session.dirty:
+        if type(instance) in models and type(instance) != Log and session.is_modified(instance):
+            if hasattr(instance, 'id') and instance.id:
+                _pending_logs.append(('update', type(instance).__name__, instance.id, None))
+    
+    # 收集删除的对象（此时 id 已经有了）
+    for instance in session.deleted:
+        if type(instance) in models and type(instance) != Log:
+            if hasattr(instance, 'id') and instance.id:
+                _pending_logs.append(('delete', type(instance).__name__, instance.id, None))
 
-    for instance in session.new:  
-        if type(instance) in models:
-            _auto_log(
-                table_name=type(instance).__name__,
-                record_id=instance.id,
-                action='create'
-            )
-
-    for instance in session.dirty:  # 修改
-        if type(instance) in models and session.is_modified(instance):
-            _auto_log(
-                table_name=type(instance).__name__,
-                record_id=instance.id,
-                action='update'
-            )
-
-    for instance in session.deleted:  # 删除
-        if type(instance) in models:
-            _auto_log(
-                table_name=type(instance).__name__,
-                record_id=instance.id,
-                action='delete'
-            )
+@listens_for(db.session, 'after_flush_postexec')
+def after_flush_postexec(session, flush_context):
+    """在 flush 完成后记录日志（此时所有对象的 id 都已经生成）"""
+    global _pending_logs
+    
+    for action, table_name, record_id, instance in _pending_logs:
+        # 如果是新创建的对象，从实例获取 id
+        if action == 'create' and instance is not None:
+            if hasattr(instance, 'id') and instance.id:
+                _auto_log(table_name, instance.id, action)
+        # 如果是更新或删除，使用已保存的 record_id
+        elif record_id is not None:
+            _auto_log(table_name, record_id, action)
+    
+    _pending_logs = []
 
 def _auto_log(table_name: str, record_id: int, action: str):
+    """记录操作日志"""
+    try:
+        user_id = current_user.id if current_user.is_authenticated else None
 
-    user_id = current_user.id if current_user.is_authenticated else - 1
-
-    log = Log(
-        table_name=table_name,
-        record_id=record_id,
-        action=action[:255], 
-        user_id=user_id,
-        timestamp=datetime.utcnow()
-    )
-    db.session.add(log)
+        log = Log(
+            table_name=table_name,
+            record_id=record_id,
+            action=action[:255], 
+            user_id=user_id,
+            timestamp=datetime.utcnow()
+        )
+        db.session.add(log)
+        # 注意：这里不调用 commit，让调用者控制事务
+    except Exception as e:
+        # 如果记录日志失败，不影响主操作
+        pass

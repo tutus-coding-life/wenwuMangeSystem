@@ -8,7 +8,7 @@ if defined _OLD_CODEPAGE (
     "%SystemRoot%\System32\chcp.com" 65001 > nul
 )
 
-set VIRTUAL_ENV=D:\Users\tutu\Desktop\hnu的小事情\大三上\数据库系统\文物管理系统\venv
+set VIRTUAL_ENV=D:\Database_term_work\wenwuMangeSystem\venv
 
 if not defined PROMPT set PROMPT=$P$G
 
