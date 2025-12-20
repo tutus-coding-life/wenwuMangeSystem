@@ -36,7 +36,6 @@ class Dynasty(db.Model):
 class MotifAndPattern(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.Text, nullable=False)
-    description = db.Column(db.Text)
 
 class ObjectType(db.Model):
     id = db.Column(db.Integer, primary_key=True)

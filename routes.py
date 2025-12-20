@@ -105,7 +105,7 @@ def artifacts(museum_id):
     if form_structure_id:
         query = query.filter(Artifact.form_structure_id == form_structure_id)
 
-    # 排序（推荐按名称）
+    # 排序（
     query = query.order_by(Artifact.name)
 
     pagination = query.paginate(page=page, per_page=21, error_out=False)
@@ -786,7 +786,7 @@ def before_flush(session, flush_context, instances):
 
 def _auto_log(table_name: str, record_id: int, action: str):
 
-    user_id = current_user.id if current_user.is_authenticated else None
+    user_id = current_user.id if current_user.is_authenticated else - 1
 
     log = Log(
         table_name=table_name,
