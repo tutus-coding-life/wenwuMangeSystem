@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+{% block title %}博物馆管理{% endblock %}
+{% block content %}
+<h2>博物馆管理</h2>
+<div class="alert alert-warning">
+    <strong>警告：</strong>普通删除只能删除没有文物的博物馆。强制删除会同时删除博物馆及其下的所有文物，此操作不可恢复，请谨慎使用！
+</div>
+<table class="table table-striped">
+    <thead>
+        <tr>
+            <th>ID</th>
+            <th>博物馆名称</th>
+            <th>文物数量</th>
+            <th>操作</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for item in museums_with_count %}
+        <tr>
+            <td>{{ item.museum.id }}</td>
+            <td>
+                <a href="{{ url_for('artifacts', museum_id=item.museum.id) }}">
+                    {{ item.museum.name }}
+                </a>
+            </td>
+            <td>
+                <span class="badge {% if item.artifact_count > 0 %}bg-warning{% else %}bg-success{% endif %}">
+                    {{ item.artifact_count }} 件
+                </span>
+            </td>
+            <td>
+                {% if item.artifact_count == 0 %}
+                <form action="{{ url_for('delete_museum', id=item.museum.id) }}" method="post" style="display:inline;">
+                    <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('确定要删除博物馆【{{ item.museum.name|e }}】吗？此操作不可恢复！')">
+                        删除
+                    </button>
+                </form>
+                {% else %}
+                <form action="{{ url_for('force_delete_museum', id=item.museum.id) }}" method="post" style="display:inline;">
+                    <button type="submit" class="btn btn-sm btn-danger force-delete-btn" 
+                            data-museum-name="{{ item.museum.name|e }}" 
+                            data-artifact-count="{{ item.artifact_count }}">
+                        强制删除
+                    </button>
+                </form>
+                {% endif %}
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    var forceDeleteButtons = document.querySelectorAll('.force-delete-btn');
+    forceDeleteButtons.forEach(function(button) {
+        button.addEventListener('click', function(e) {
+            e.preventDefault();
+            var form = this.closest('form');
+            var museumName = this.getAttribute('data-museum-name');
+            var artifactCount = parseInt(this.getAttribute('data-artifact-count'));
+            
+            var message = '⚠️ 警告：您即将强制删除博物馆【' + museumName + '】！\n\n';
+            message += '此操作将同时删除：\n';
+            message += '• 博物馆：' + museumName + '\n';
+            message += '• 文物数量：' + artifactCount + ' 件\n\n';
+            message += '此操作不可恢复！\n\n';
+            message += '请输入博物馆名称 "' + museumName + '" 以确认删除：';
+            
+            var userInput = prompt(message);
+            
+            if (userInput === museumName) {
+                if (confirm('最后确认：您确定要删除博物馆【' + museumName + '】及其下的 ' + artifactCount + ' 件文物吗？\n\n此操作不可恢复！')) {
+                    form.submit();
+                }
+            } else if (userInput !== null) {
+                alert('输入的博物馆名称不匹配，操作已取消。');
+            }
+        });
+    });
+});
+</script>
+{% endblock %}
+

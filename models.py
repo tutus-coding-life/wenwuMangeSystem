@@ -36,7 +36,6 @@ class Dynasty(db.Model):
 class MotifAndPattern(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.Text, nullable=False)
-    description = db.Column(db.Text)
 
 class ObjectType(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -115,7 +114,8 @@ class Log(db.Model):
     
     timestamp = db.Column(db.DateTime, default=datetime.utcnow, index=True)
     # 用户被删除时RESTRICT（防止丢失操作人信息）
-    user_id = db.Column(db.Integer, db.ForeignKey('user.id', ondelete='RESTRICT'), nullable=False)
+    # nullable=True 允许未登录用户的操作（如注册）也能记录日志
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id', ondelete='RESTRICT'), nullable=True)
     user = db.relationship('User', backref='logs')
 
     def __repr__(self):
