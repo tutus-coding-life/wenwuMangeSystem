@@ -1,26 +1,58 @@
 {% extends "base.html" %}
-{% block title %}导入CSV数据{% endblock %}
+{% block title %}数据导入{% endblock %}
+
 {% block content %}
-<h2>导入CSV数据</h2>
-<div class="card">
+<h2 class="mb-4">导入文物数据</h2>
+
+<div class="card shadow-sm">
     <div class="card-body">
-        <form method="post">
+        <form method="post" enctype="multipart/form-data">
             {{ form.hidden_tag() }}
+
             <div class="mb-3">
-                {{ form.type.label(class="form-label") }}
-                {{ form.type(class="form-select") }}
+                {{ form.museum_id.label(class="form-label") }}
+                {{ form.museum_id(class="form-select") }}
             </div>
-            <div class="alert alert-info">
-                <strong>注意：</strong>系统将读取 <code>data/</code> 目录下的对应CSV文件：
-                <ul>
-                    <li>北京故宫 → beijing_artifacts.csv</li>
-                    <li>台北故宫 → taipei_artifacts.csv</li>
-                </ul>
+
+            <div class="mb-3" id="new-museum-div" style="display: none;">
+                {{ form.new_museum_name.label(class="form-label") }}
+                {{ form.new_museum_name(class="form-control", placeholder="例如：故宫博物院") }}
+                {% if form.new_museum_name.errors %}
+                    <div class="text-danger small mt-1">{{ form.new_museum_name.errors|join(', ') }}</div>
+                {% endif %}
             </div>
+
+            <div class="mb-4">
+                {{ form.file.label(class="form-label") }}
+                {{ form.file(class="form-control") }}
+                <div class="form-text">
+                    不上传文件将尝试使用默认路径（如 data/beijing_museum.xlsx）
+                </div>
+            </div>
+
             <div class="text-center">
-                {{ form.submit(class="btn btn-danger btn-lg") }}
+                {{ form.submit(class="btn btn-primary btn-lg px-5") }}
+                <a href="{{ url_for('index') }}" class="btn btn-secondary btn-lg px-5 ms-3">取消</a>
             </div>
         </form>
     </div>
 </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const museumSelect = document.getElementById('museum_id');
+    const newMuseumDiv = document.getElementById('new-museum-div');
+
+    function toggleNewMuseum() {
+        if (museumSelect.value == '-1') {
+            newMuseumDiv.style.display = 'block';
+        } else {
+            newMuseumDiv.style.display = 'none';
+        }
+    }
+
+    museumSelect.addEventListener('change', toggleNewMuseum);
+    toggleNewMuseum(); 
+});
+</script>
 {% endblock %}

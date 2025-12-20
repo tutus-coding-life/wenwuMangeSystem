@@ -1,0 +1,271 @@
+{% extends "base.html" %}
+
+{% block title %}{{ museum.name }} 文物筛选{% endblock %}
+
+{% block content %}
+<div class="container my-5">
+    <div class="row g-5">
+        <!-- 左侧侧边栏：筛选面板 -->
+        <div class="col-lg-3">
+            <div class="sticky-top" style="top: 2rem;">
+                <div class="card border-0 shadow-sm">
+                    <div class="card-header bg-primary text-white">
+                        <h5 class="mb-0"><i class="bi bi-funnel me-2"></i>筛选条件</h5>
+                    </div>
+                    <div class="card-body">
+                        <form method="get" id="filter-form">
+                            <!-- 保留当前页码（切换筛选时回到第一页） -->
+                            <input type="hidden" name="page" value="1">
+
+                            <div class="mb-3">
+                                <label class="form-label small fw-bold text-primary">类别</label>
+                                <select name="category" class="form-select form-select-sm">
+                                    <option value="">全部类别</option>
+                                    {% for cat in categories %}
+                                    <option value="{{ cat.id }}" {% if selected_category == cat.id %}selected{% endif %}>
+                                        {{ cat.name }}
+                                    </option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+
+                            <div class="mb-3">
+                                <label class="form-label small fw-bold text-primary">朝代</label>
+                                <select name="dynasty" class="form-select form-select-sm">
+                                    <option value="">全部朝代</option>
+                                    {% for dyn in dynasties %}
+                                    <option value="{{ dyn.id }}" {% if selected_dynasty == dyn.id %}selected{% endif %}>
+                                        {{ dyn.name }}
+                                    </option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+
+                            <div class="mb-3">
+                                <label class="form-label small fw-bold text-primary">图案</label>
+                                <select name="motif" class="form-select form-select-sm">
+                                    <option value="">全部图案</option>
+                                    {% for m in motifs %}
+                                    <option value="{{ m.id }}" {% if selected_motif == m.id %}selected{% endif %}>
+                                        {{ m.name }}
+                                    </option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+
+                            <div class="mb-3">
+                                <label class="form-label small fw-bold text-primary">对象类型</label>
+                                <select name="object_type" class="form-select form-select-sm">
+                                    <option value="">全部类型</option>
+                                    {% for ot in object_types %}
+                                    <option value="{{ ot.id }}" {% if selected_object_type == ot.id %}selected{% endif %}>
+                                        {{ ot.name }}
+                                    </option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+
+                            <div class="mb-4">
+                                <label class="form-label small fw-bold text-primary">形式结构</label>
+                                <select name="form_structure" class="form-select form-select-sm">
+                                    <option value="">全部结构</option>
+                                    {% for fs in form_structures %}
+                                    <option value="{{ fs.id }}" {% if selected_form_structure == fs.id %}selected{% endif %}>
+                                        {{ fs.name }}
+                                    </option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+
+                            <div class="d-grid gap-2">
+                                <button type="submit" class="btn btn-primary btn-sm">
+                                    <i class="bi bi-check-lg me-1"></i> 应用筛选
+                                </button>
+                                <a href="{{ url_for('artifacts', museum_id=museum.id) }}" class="btn btn-outline-secondary btn-sm">
+                                    <i class="bi bi-arrow-counterclockwise me-1"></i> 清除全部
+                                </a>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 右侧主内容：文物卡片列表 -->
+        <div class="col-lg-9">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h2 class="fw-light mb-0">
+                    {{ museum.name }}
+                    <span class="fs-5 text-muted ms-3">共 {{ pagination.total }} 件文物</span>
+                </h2>
+
+                {% if current_user.role == 'admin' %}
+                <a href="{{ url_for('add_artifact', museum_id=museum.id) }}" class="btn btn-outline-success btn-lg">
+                    <i class="bi bi-plus-circle me-1"></i> 添加文物
+                </a>
+                {% endif %}
+            </div>
+
+            <!-- 文物卡片网格 -->
+            {% if artifacts %}
+            <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-4">
+                {% for artifact in artifacts %}
+                <div class="col">
+                    <div class="card h-100 shadow-sm border-0 hover-shadow transition position-relative"
+                         data-bs-toggle="tooltip"
+                         data-bs-html="true"
+                         data-bs-placement="right"
+                         title="
+                            <div class='text-start small p-2'>
+                                <strong class='d-block mb-2'>详细信息</strong>
+                                <div><strong>ID：</strong> {{ artifact.id }}</div>
+                                {% if artifact.number %}<div><strong>编号：</strong> {{ artifact.number }}</div>{% endif %}
+                                {% if artifact.description %}
+                                <div class='mt-2'><strong>描述：</strong><br>{{ artifact.description|replace('\n', '<br>')|safe }}</div>
+                                {% endif %}
+                                <hr class='my-2'>
+                                <div class='mt-2 small'>
+                                    <div><strong>类别：</strong> {{ artifact.category.name if artifact.category else '—' }}</div>
+                                    <div><strong>朝代：</strong> {{ artifact.dynasty.name if artifact.dynasty else '—' }}</div>
+                                    <div><strong>图案：</strong> {{ artifact.motif.name if artifact.motif else '—' }}</div>
+                                    <div><strong>对象类型：</strong> {{ artifact.object_type.name if artifact.object_type else '—' }}</div>
+                                    <div><strong>形式结构：</strong> {{ artifact.form_structure.name if artifact.form_structure else '—' }}</div>
+                                </div>
+                            </div>
+                         ">
+                        <!-- 图片 -->
+                        <div class="position-relative overflow-hidden" style="height: 220px;">
+                            {% if artifact.image %}
+                                <img src="{{ artifact.image.url }}"
+                                     alt="{{ artifact.name }}"
+                                     class="card-img-top h-100 w-100 object-fit-cover transition">
+                                <div class="image-overlay"></div>
+                            {% else %}
+                                <div class="bg-light d-flex align-items-center justify-content-center h-100">
+                                    <span class="text-muted fs-4">无图片</span>
+                                </div>
+                            {% endif %}
+                        </div>
+
+                        <!-- 卡片内容 -->
+                        <div class="card-body d-flex flex-column">
+                            <h5 class="card-title fw-medium mb-3">{{ artifact.name }}</h5>
+
+                            <div class="text-muted small flex-grow-1">
+                                <div><strong>类别：</strong>{{ artifact.category.name if artifact.category else '—' }}</div>
+                                <div><strong>朝代：</strong>{{ artifact.dynasty.name if artifact.dynasty else '—' }}</div>
+                                {% if artifact.description %}
+                                <div class="mt-2 text-truncate">{{ artifact.description|truncate(60) }}</div>
+                                {% endif %}
+                            </div>
+
+                            <div class="mt-auto pt-3 border-top">
+                                <div class="small text-muted mb-2">
+                                    ID: {{ artifact.id }}
+                                    {% if artifact.number %} | 编号: {{ artifact.number }}{% endif %}
+                                </div>
+
+                                {% if current_user.role == 'admin' %}
+                                <div class="btn-group w-100" role="group">
+                                    <a href="{{ url_for('edit_artifact', museum_id=museum.id, id=artifact.id) }}"
+                                       class="btn btn-sm btn-outline-warning flex-fill">修改</a>
+                                    <form action="{{ url_for('delete_artifact', museum_id=museum.id, id=artifact.id) }}"
+                                          method="post" style="display:inline;">
+                                        <button type="submit" class="btn btn-sm btn-outline-danger flex-fill"
+                                                onclick="return confirm('确定删除？')">删除</button>
+                                    </form>
+                                </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="text-center py-5">
+                <i class="bi bi-search fs-1 text-muted mb-3"></i>
+                <p class="text-muted fs-4">未找到符合筛选条件的文物</p>
+                <a href="{{ url_for('artifacts', museum_id=museum.id) }}" class="btn btn-outline-primary">
+                    查看全部文物
+                </a>
+            </div>
+            {% endif %}
+
+           <!-- 分页 -->
+            {% if pagination and pagination.pages > 1 %}
+            <nav class="mt-5">
+                <ul class="pagination justify-content-center">
+                    {% if pagination.has_prev %}
+                    <li class="page-item">
+                        <a class="page-link" href="{{ url_for('artifacts', museum_id=museum.id, page=pagination.prev_num) }}">上一页</a>
+                    </li>
+                    {% endif %}
+
+                    {% for p in pagination.iter_pages(left_edge=2, left_current=3, right_current=4, right_edge=2) %}
+                        {% if p %}
+                            {% if p != pagination.page %}
+                            <li class="page-item"><a class="page-link" href="{{ url_for('artifacts', museum_id=museum.id, page=p) }}">{{ p }}</a></li>
+                            {% else %}
+                            <li class="page-item active"><span class="page-link">{{ p }}</span></li>
+                            {% endif %}
+                        {% else %}
+                            <li class="page-item disabled"><span class="page-link">...</span></li>
+                        {% endif %}
+                    {% endfor %}
+
+                    {% if pagination.has_next %}
+                    <li class="page-item">
+                        <a class="page-link" href="{{ url_for('artifacts', museum_id=museum.id, page=pagination.next_num) }}">下一页</a>
+                    </li>
+                    {% endif %}
+                </ul>
+            </nav>
+            {% endif %}
+                </div>
+    </div>
+</div>
+
+<!-- CSS 样式（保留你原有的悬停效果） -->
+<style>
+    .transition { transition: all 0.4s ease; }
+    .hover-shadow { transition: box-shadow 0.3s ease, transform 0.3s ease; }
+    .hover-shadow:hover {
+        box-shadow: 0 15px 35px rgba(0,0,0,0.15) !important;
+        transform: translateY(-8px);
+    }
+    .card-img-top:hover { transform: scale(1.15); }
+    .image-overlay {
+        position: absolute; inset: 0;
+        background: linear-gradient(to top, rgba(0,0,0,0.6), transparent 60%);
+        opacity: 0; transition: opacity 0.4s ease;
+    }
+    .card:hover .image-overlay { opacity: 1; }
+
+    /* Tooltip 美化 */
+    .tooltip-inner {
+        max-width: 400px;
+        background: #ffffff;
+        color: #333;
+        border: 1px solid #ddd;
+        box-shadow: 0 8px 25px rgba(0,0,0,0.2);
+        padding: 14px;
+        border-radius: 10px;
+        font-size: 0.95rem;
+    }
+    .tooltip.show { opacity: 0.98; }
+</style>
+
+<!-- 启用 Tooltip -->
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]');
+    tooltipTriggerList.forEach(el => new bootstrap.Tooltip(el, {
+        boundary: 'window',
+        placement: 'right',
+        trigger: 'hover',
+        delay: { show: 200, hide: 100 }
+    }));
+});
+</script>
+{% endblock %}

@@ -1,17 +1,23 @@
-from flask import render_template, redirect, url_for, flash, request
+from flask import render_template, redirect, url_for, flash, request,abort
 from flask_login import login_user, logout_user, current_user, login_required
+from werkzeug.utils import secure_filename
 from app import app
 from models import (
-    db, User, ArtifactBeijing, ArtifactTaipei, Log,
+    db, User, Artifact, Museum, Log,
     Category, Dynasty, Image,
     MotifAndPattern, ObjectType, FormAndStructure
 )
 from forms import (
     RegisterForm, LoginForm, EditProfileForm, UserForm,
-    ArtifactBeijingForm, ArtifactTaipeiForm, LabelForm, ImportForm
+    ArtifactForm,  LabelForm, ImportForm
 )
 import pandas as pd
 import os
+
+# 上下文处理，每一次渲染模板前自动把变量注入到所有模板的上下文里。
+@app.context_processor
+def inject_museums():
+    return {'museums': Museum.query.order_by(Museum.name).all()}
 
 # ==============================
 # 基础路由
@@ -70,61 +76,135 @@ def edit_profile():
     return render_template('edit_profile.html', form=form)
 
 # ==============================
-# 北京故宫文物管理
+# 文物管理
 # ==============================
-
-@app.route('/artifacts_beijing')
+@app.route('/artifacts/<int:museum_id>')
 @login_required
-def artifacts_beijing():
-    artifacts = ArtifactBeijing.query.all()
-    return render_template('artifacts_beijing.html', artifacts=artifacts)
+def artifacts(museum_id):
+    page = request.args.get('page', 1, type=int)
+    
+    # 获取筛选参数
+    category_id = request.args.get('category', type=int)
+    dynasty_id = request.args.get('dynasty', type=int)
+    motif_id = request.args.get('motif', type=int)
+    object_type_id = request.args.get('object_type', type=int)
+    form_structure_id = request.args.get('form_structure', type=int)
 
-@app.route('/admin/add_artifact_beijing', methods=['GET', 'POST'])
+    # 基础查询：该博物馆的所有文物
+    query = Artifact.query.filter_by(museum_id=museum_id)
+
+    # 应用筛选
+    if category_id:
+        query = query.filter(Artifact.category_id == category_id)
+    if dynasty_id:
+        query = query.filter(Artifact.dynasty_id == dynasty_id)
+    if motif_id:
+        query = query.filter(Artifact.motif_id == motif_id)
+    if object_type_id:
+        query = query.filter(Artifact.object_type_id == object_type_id)
+    if form_structure_id:
+        query = query.filter(Artifact.form_structure_id == form_structure_id)
+
+    # 排序（推荐按名称）
+    query = query.order_by(Artifact.name)
+
+    pagination = query.paginate(page=page, per_page=21, error_out=False)
+
+    # 获取筛选选项（仅显示该博物馆实际拥有的属性值）
+    museum_artifacts = Artifact.query.filter_by(museum_id=museum_id).all()
+
+    categories = sorted({a.category for a in museum_artifacts if a.category}, key=lambda x: x.name)
+    dynasties = sorted({a.dynasty for a in museum_artifacts if a.dynasty}, key=lambda x: x.name)
+    motifs = sorted({a.motif for a in museum_artifacts if a.motif}, key=lambda x: x.name)
+    object_types = sorted({a.object_type for a in museum_artifacts if a.object_type}, key=lambda x: x.name)
+    form_structures = sorted({a.form_structure for a in museum_artifacts if a.form_structure}, key=lambda x: x.name)
+
+    museum = Museum.query.get_or_404(museum_id)
+
+    return render_template(
+        'artifacts.html',
+        museum=museum,
+        artifacts=pagination.items,
+        pagination=pagination,
+        categories=categories,
+        dynasties=dynasties,
+        motifs=motifs,
+        object_types=object_types,
+        form_structures=form_structures,
+        # 当前筛选值，用于高亮选中
+        selected_category=category_id,
+        selected_dynasty=dynasty_id,
+        selected_motif=motif_id,
+        selected_object_type=object_type_id,
+        selected_form_structure=form_structure_id
+    )
+
+@app.route('/artifact/add/<int:museum_id>', methods=['GET', 'POST'])
 @login_required
-def add_artifact_beijing():
+def add_artifact(museum_id):
     if current_user.role != 'admin':
-        flash('无权限', 'error')
+        flash('无权限访问', 'danger')
         return redirect(url_for('index'))
-    form = ArtifactBeijingForm()
+
+    museum = Museum.query.get_or_404(museum_id)
+
+    form = ArtifactForm()
+
     if form.validate_on_submit():
-        _create_or_get_associated_records(form) # 添加不存在的属性值到关联表里，防止关联表属性为空，报错
-        # 在表格中查询结果
+        # 自动创建或获取关联记录
+        _create_or_get_associated_records(form)
+
         category = Category.query.filter_by(name=form.category.data).first()
         dynasty = Dynasty.query.filter_by(name=form.dynasty.data).first()
         image = Image.query.filter_by(url=form.image_url.data).first() if form.image_url.data else None
         motif = MotifAndPattern.query.filter_by(name=form.motif.data).first() if form.motif.data else None
         obj_type = ObjectType.query.filter_by(name=form.object_type.data).first() if form.object_type.data else None
         form_struct = FormAndStructure.query.filter_by(name=form.form_structure.data).first() if form.form_structure.data else None
-        # 创建文物实体
-        artifact = ArtifactBeijing(
+
+        # 创建通用 Artifact 实例
+        artifact = Artifact(
+            museum_id=museum_id,
             name=form.name.data,
-            category_id=category.id,
-            number=form.number.data,
-            dynasty_id=dynasty.id,
+            description=form.description.data or None,  # 台北特有字段，可为空
+            category_id=category.id if category else None,
+            dynasty_id=dynasty.id if dynasty else None,
             image_id=image.id if image else None,
             motif_id=motif.id if motif else None,
             object_type_id=obj_type.id if obj_type else None,
             form_structure_id=form_struct.id if form_struct else None
         )
-        # 提交文物到数据库里
+
         db.session.add(artifact)
         db.session.commit()
-        _add_log('ArtifactBeijing', 'add')
-        flash('北京文物添加成功', 'success')
-        return redirect(url_for('artifacts_beijing'))
-    return render_template('artifact_form.html', form=form, title='添加北京文物')
 
-@app.route('/admin/edit_artifact_beijing/<int:id>', methods=['GET', 'POST'])
+        flash(f'{museum.name} 文物添加成功', 'success')
+        return redirect(url_for('artifacts', museum_id=museum_id))
+
+    # GET 请求：显示表单
+    return render_template(
+        'artifact_form.html',
+        form=form,
+        title=f'添加 {museum.name} 文物',
+        museum=museum
+    )
+
+@app.route('/artifact/edit/<int:museum_id>/<int:id>', methods=['GET', 'POST'])
 @login_required
-def edit_artifact_beijing(id):
+def edit_artifact(museum_id, id):
     if current_user.role != 'admin':
-        flash('无权限', 'error')
+        flash('无权限访问', 'danger')
         return redirect(url_for('index'))
-    # 根据url的id 去数据库查询这件文物
-    artifact = ArtifactBeijing.query.get_or_404(id)
-    form = ArtifactBeijingForm(obj=artifact)
+
+    artifact = Artifact.query.get_or_404(id)
+    if artifact.museum_id != museum_id:
+        abort(403)  # 防止跨博物馆修改
+
+    museum = Museum.query.get_or_404(museum_id)
+    form = ArtifactForm(obj=artifact)  # 自动填充表单
+
     if form.validate_on_submit():
         _create_or_get_associated_records(form)
+
         category = Category.query.filter_by(name=form.category.data).first()
         dynasty = Dynasty.query.filter_by(name=form.dynasty.data).first()
         image = Image.query.filter_by(url=form.image_url.data).first() if form.image_url.data else None
@@ -132,122 +212,46 @@ def edit_artifact_beijing(id):
         obj_type = ObjectType.query.filter_by(name=form.object_type.data).first() if form.object_type.data else None
         form_struct = FormAndStructure.query.filter_by(name=form.form_structure.data).first() if form.form_structure.data else None
 
-        # 修改文物属性
+        # 更新字段
         artifact.name = form.name.data
-        artifact.category_id = category.id
-        artifact.number = form.number.data
-        artifact.dynasty_id = dynasty.id
+        artifact.description = form.description.data or None
+        artifact.category_id = category.id if category else None
+        artifact.dynasty_id = dynasty.id if dynasty else None
         artifact.image_id = image.id if image else None
         artifact.motif_id = motif.id if motif else None
         artifact.object_type_id = obj_type.id if obj_type else None
         artifact.form_structure_id = form_struct.id if form_struct else None
 
         db.session.commit()
-        _add_log('ArtifactBeijing', 'update')
-        flash('北京文物修改成功', 'success')
-        return redirect(url_for('artifacts_beijing'))
-    return render_template('artifact_form.html', form=form, title='修改北京文物')
 
-@app.route('/admin/delete_artifact_beijing/<int:id>', methods=['POST'])
+        flash(f'{museum.name} 文物修改成功', 'success')
+        return redirect(url_for('artifacts', museum_id=museum_id))
+
+    return render_template(
+        'artifact_form.html',
+        form=form,
+        title=f'修改 {museum.name} 文物',
+        museum=museum
+    )
+
+@app.route('/artifact/delete/<int:museum_id>/<int:id>', methods=['POST'])
 @login_required
-def delete_artifact_beijing(id):
+def delete_artifact(museum_id, id):
     if current_user.role != 'admin':
-        flash('无权限', 'error')
+        flash('无权限', 'danger')
         return redirect(url_for('index'))
-    artifact = ArtifactBeijing.query.get_or_404(id)
+
+    artifact = Artifact.query.get_or_404(id)
+    if artifact.museum_id != museum_id:
+        abort(403)
+
     db.session.delete(artifact)
     db.session.commit()
-    _add_log('ArtifactBeijing', 'delete')
-    flash('北京文物删除成功', 'success')
-    return redirect(url_for('artifacts_beijing'))
 
-# ==============================
-# 台北故宫文物管理
-# ==============================
 
-@app.route('/artifacts_taipei')
-@login_required
-def artifacts_taipei():
-    artifacts = ArtifactTaipei.query.all()
-    return render_template('artifacts_taipei.html', artifacts=artifacts)
+    flash('文物删除成功', 'success')
+    return redirect(url_for('artifacts', museum_id=museum_id))
 
-@app.route('/admin/add_artifact_taipei', methods=['GET', 'POST'])
-@login_required
-def add_artifact_taipei():
-    if current_user.role != 'admin':
-        flash('无权限', 'error')
-        return redirect(url_for('index'))
-    form = ArtifactTaipeiForm()
-    if form.validate_on_submit():
-        _create_or_get_associated_records(form)
-        category = Category.query.filter_by(name=form.category.data).first()
-        dynasty = Dynasty.query.filter_by(name=form.dynasty.data).first()
-        image = Image.query.filter_by(url=form.image_url.data).first() if form.image_url.data else None
-        motif = MotifAndPattern.query.filter_by(name=form.motif.data).first() if form.motif.data else None
-        obj_type = ObjectType.query.filter_by(name=form.object_type.data).first() if form.object_type.data else None
-        form_struct = FormAndStructure.query.filter_by(name=form.form_structure.data).first() if form.form_structure.data else None
-
-        artifact = ArtifactTaipei(
-            name=form.name.data,
-            category_id=category.id,
-            dynasty_id=dynasty.id,
-            description=form.description.data,
-            image_id=image.id if image else None,
-            motif_id=motif.id if motif else None,
-            object_type_id=obj_type.id if obj_type else None,
-            form_structure_id=form_struct.id if form_struct else None
-        )
-        db.session.add(artifact)
-        db.session.commit()
-        _add_log('ArtifactTaipei', 'add')
-        flash('台北文物添加成功', 'success')
-        return redirect(url_for('artifacts_taipei'))
-    return render_template('artifact_form.html', form=form, title='添加台北文物')
-
-@app.route('/admin/edit_artifact_taipei/<int:id>', methods=['GET', 'POST'])
-@login_required
-def edit_artifact_taipei(id):
-    if current_user.role != 'admin':
-        flash('无权限', 'error')
-        return redirect(url_for('index'))
-    artifact = ArtifactTaipei.query.get_or_404(id)
-    form = ArtifactTaipeiForm(obj=artifact)
-    if form.validate_on_submit():
-        _create_or_get_associated_records(form)
-        category = Category.query.filter_by(name=form.category.data).first()
-        dynasty = Dynasty.query.filter_by(name=form.dynasty.data).first()
-        image = Image.query.filter_by(url=form.image_url.data).first() if form.image_url.data else None
-        motif = MotifAndPattern.query.filter_by(name=form.motif.data).first() if form.motif.data else None
-        obj_type = ObjectType.query.filter_by(name=form.object_type.data).first() if form.object_type.data else None
-        form_struct = FormAndStructure.query.filter_by(name=form.form_structure.data).first() if form.form_structure.data else None
-
-        artifact.name = form.name.data
-        artifact.category_id = category.id
-        artifact.dynasty_id = dynasty.id
-        artifact.description = form.description.data
-        artifact.image_id = image.id if image else None
-        artifact.motif_id = motif.id if motif else None
-        artifact.object_type_id = obj_type.id if obj_type else None
-        artifact.form_structure_id = form_struct.id if form_struct else None
-
-        db.session.commit()
-        _add_log('ArtifactTaipei', 'update')
-        flash('台北文物修改成功', 'success')
-        return redirect(url_for('artifacts_taipei'))
-    return render_template('artifact_form.html', form=form, title='修改台北文物')
-
-@app.route('/admin/delete_artifact_taipei/<int:id>', methods=['POST'])
-@login_required
-def delete_artifact_taipei(id):
-    if current_user.role != 'admin':
-        flash('无权限', 'error')
-        return redirect(url_for('index'))
-    artifact = ArtifactTaipei.query.get_or_404(id)
-    db.session.delete(artifact)
-    db.session.commit()
-    _add_log('ArtifactTaipei', 'delete')
-    flash('台北文物删除成功', 'success')
-    return redirect(url_for('artifacts_taipei'))
 
 # ==============================
 # 用户管理
@@ -278,7 +282,6 @@ def add_user():
             user.set_password(form.password.data)
         db.session.add(user)
         db.session.commit()
-        _add_log('User', 'add')
         flash('用户添加成功', 'success')
         return redirect(url_for('users'))
     return render_template('user_form.html', form=form, title='添加用户')
@@ -300,7 +303,6 @@ def edit_user(id):
         if form.password.data:
             user.set_password(form.password.data)
         db.session.commit()
-        _add_log('User', 'update')
         flash('用户修改成功', 'success')
         return redirect(url_for('users'))
     return render_template('user_form.html', form=form, title='修改用户')
@@ -317,7 +319,6 @@ def delete_user(id):
     user = User.query.get_or_404(id)
     db.session.delete(user)
     db.session.commit()
-    _add_log('User', 'delete')
     flash('用户删除成功', 'success')
     return redirect(url_for('users'))
 
@@ -329,7 +330,7 @@ def delete_user(id):
 @login_required
 def labels_motif():
     labels = MotifAndPattern.query.all()
-    return render_template('labels.html', items=labels, type='图案标签',
+    return render_template('labels.html', items=labels, type='MotifAndPattern',
                            add_route='add_motif', edit_route='edit_motif', delete_route='delete_motif')
 
 @app.route('/admin/add_motif', methods=['GET', 'POST'])
@@ -340,10 +341,9 @@ def add_motif():
         return redirect(url_for('index'))
     form = LabelForm()
     if form.validate_on_submit():
-        label = MotifAndPattern(name=form.name.data, description=form.description.data)
+        label = MotifAndPattern(name=form.name.data)
         db.session.add(label)
         db.session.commit()
-        _add_log('MotifAndPattern', 'add')
         flash('图案标签添加成功', 'success')
         return redirect(url_for('labels_motif'))
     return render_template('label_form.html', form=form, title='添加图案标签')
@@ -360,7 +360,6 @@ def edit_motif(id):
         label.name = form.name.data
         label.description = form.description.data
         db.session.commit()
-        _add_log('MotifAndPattern', 'update')
         flash('图案标签修改成功', 'success')
         return redirect(url_for('labels_motif'))
     return render_template('label_form.html', form=form, title='修改图案标签')
@@ -374,7 +373,6 @@ def delete_motif(id):
     label = MotifAndPattern.query.get_or_404(id)
     db.session.delete(label)
     db.session.commit()
-    _add_log('MotifAndPattern', 'delete')
     flash('图案标签删除成功', 'success')
     return redirect(url_for('labels_motif'))
 
@@ -397,10 +395,9 @@ def add_object_type():
         return redirect(url_for('index'))
     form = LabelForm()
     if form.validate_on_submit():
-        label = ObjectType(name=form.name.data, description=form.description.data or '')
+        label = ObjectType(name=form.name.data)
         db.session.add(label)
         db.session.commit()
-        _add_log('ObjectType', 'add')
         flash('对象类型添加成功', 'success')
         return redirect(url_for('labels_object_type'))
     return render_template('label_form.html', form=form, title='添加对象类型')
@@ -415,9 +412,7 @@ def edit_object_type(id):
     form = LabelForm(obj=label)
     if form.validate_on_submit():
         label.name = form.name.data
-        label.description = form.description.data or ''
         db.session.commit()
-        _add_log('ObjectType', 'update')
         flash('对象类型修改成功', 'success')
         return redirect(url_for('labels_object_type'))
     return render_template('label_form.html', form=form, title='修改对象类型')
@@ -431,7 +426,6 @@ def delete_object_type(id):
     label = ObjectType.query.get_or_404(id)
     db.session.delete(label)
     db.session.commit()
-    _add_log('ObjectType', 'delete')
     flash('对象类型删除成功', 'success')
     return redirect(url_for('labels_object_type'))
 
@@ -454,10 +448,9 @@ def add_form_structure():
         return redirect(url_for('index'))
     form = LabelForm()
     if form.validate_on_submit():
-        label = FormAndStructure(name=form.name.data, description=form.description.data or '')
+        label = FormAndStructure(name=form.name.data)
         db.session.add(label)
         db.session.commit()
-        _add_log('FormAndStructure', 'add')
         flash('形式结构添加成功', 'success')
         return redirect(url_for('labels_form_structure'))
     return render_template('label_form.html', form=form, title='添加形式结构')
@@ -472,9 +465,7 @@ def edit_form_structure(id):
     form = LabelForm(obj=label)
     if form.validate_on_submit():
         label.name = form.name.data
-        label.description = form.description.data or ''
         db.session.commit()
-        _add_log('FormAndStructure', 'update')
         flash('形式结构修改成功', 'success')
         return redirect(url_for('labels_form_structure'))
     return render_template('label_form.html', form=form, title='修改形式结构')
@@ -488,7 +479,6 @@ def delete_form_structure(id):
     label = FormAndStructure.query.get_or_404(id)
     db.session.delete(label)
     db.session.commit()
-    _add_log('FormAndStructure', 'delete')
     flash('形式结构删除成功', 'success')
     return redirect(url_for('labels_form_structure'))
 
@@ -500,7 +490,7 @@ def delete_form_structure(id):
 @login_required
 def categories():
     items = Category.query.all()
-    return render_template('categories.html', items=items, type='类别',
+    return render_template('labels.html', items=items, type='Category',
                            add_route='add_category', edit_route='edit_category', delete_route='delete_category')
 
 @app.route('/admin/add_category', methods=['GET', 'POST'])
@@ -509,12 +499,11 @@ def add_category():
     if current_user.role != 'admin':
         flash('无权限', 'error')
         return redirect(url_for('index'))
-    form = LabelForm()  # 复用LabelForm，只用name字段
+    form = LabelForm()  
     if form.validate_on_submit():
         item = Category(name=form.name.data)
         db.session.add(item)
         db.session.commit()
-        _add_log('Category', 'add')
         flash('类别添加成功', 'success')
         return redirect(url_for('categories'))
     return render_template('label_form.html', form=form, title='添加类别')
@@ -530,7 +519,6 @@ def edit_category(id):
     if form.validate_on_submit():
         item.name = form.name.data
         db.session.commit()
-        _add_log('Category', 'update')
         flash('类别修改成功', 'success')
         return redirect(url_for('categories'))
     return render_template('label_form.html', form=form, title='修改类别')
@@ -544,7 +532,6 @@ def delete_category(id):
     item = Category.query.get_or_404(id)
     db.session.delete(item)
     db.session.commit()
-    _add_log('Category', 'delete')
     flash('类别删除成功', 'success')
     return redirect(url_for('categories'))
 
@@ -555,8 +542,8 @@ def delete_category(id):
 @app.route('/dynasties')
 @login_required
 def dynasties():
-    items = Dynasty.query.all()
-    return render_template('dynasties.html', items=items, type='朝代',
+    labels = Dynasty.query.all()
+    return render_template('labels.html', items=labels, type='朝代',
                            add_route='add_dynasty', edit_route='edit_dynasty', delete_route='delete_dynasty')
 
 @app.route('/admin/add_dynasty', methods=['GET', 'POST'])
@@ -570,7 +557,6 @@ def add_dynasty():
         item = Dynasty(name=form.name.data)
         db.session.add(item)
         db.session.commit()
-        _add_log('Dynasty', 'add')
         flash('朝代添加成功', 'success')
         return redirect(url_for('dynasties'))
     return render_template('label_form.html', form=form, title='添加朝代')
@@ -586,7 +572,6 @@ def edit_dynasty(id):
     if form.validate_on_submit():
         item.name = form.name.data
         db.session.commit()
-        _add_log('Dynasty', 'update')
         flash('朝代修改成功', 'success')
         return redirect(url_for('dynasties'))
     return render_template('label_form.html', form=form, title='修改朝代')
@@ -600,7 +585,6 @@ def delete_dynasty(id):
     item = Dynasty.query.get_or_404(id)
     db.session.delete(item)
     db.session.commit()
-    _add_log('Dynasty', 'delete')
     flash('朝代删除成功', 'success')
     return redirect(url_for('dynasties'))
 
@@ -625,76 +609,116 @@ def logs():
 @login_required
 def import_data():
     if current_user.role != 'admin':
-        flash('无权限', 'error')
+        flash('无权限访问', 'danger')
         return redirect(url_for('index'))
+
     form = ImportForm()
+
     if form.validate_on_submit():
-        if form.type.data == 'beijing':
-            file_path = 'data/beijing.xlsx'
-            model = ArtifactBeijing
-            extra_fields = {'number': 'Number'}
+        if form.museum_id.data == -1:
+            # 新建博物馆
+            museum_name = form.new_museum_name.data.strip()
+            museum = Museum(name=museum_name)
+            db.session.add(museum)
+            db.session.flush()  # 获取 museum.id
+            flash(f'创建新博物馆：{museum_name} (ID: {museum.id})', 'info')
+            db.session.commit()
         else:
-            file_path = 'data/taiwan.xlsx'
-            model = ArtifactTaipei
-            extra_fields = {'description': 'Description'}
+            # 使用已有博物馆
+            museum = Museum.query.get_or_404(form.museum_id.data)
 
-        if not os.path.exists(file_path):
-            flash(f'excel 文件不存在：{file_path}', 'error')
-            return redirect(url_for('import_data'))
+        # ============ 处理文件 ============
+        if form.file.data:
+            filename = secure_filename(form.file.data.filename)
+            if not filename:
+                flash('无效的文件名', 'error')
+                return redirect(request.url)
+            file_path = os.path.join(app.config.get('UPLOAD_FOLDER', 'uploads'), filename)
+            os.makedirs(os.path.dirname(file_path), exist_ok=True)
+            form.file.data.save(file_path)
+        else:
+            # 默认文件映射（可自行扩展）
+            default_files = {
+                '故宫博物院': 'data/beijing_museum.xlsx',
+                '台北故宫博物院': 'data/taipei_museum.xlsx',
+                '大英博物馆':'data/uk_museum.xlsx',
+                '湖南省博物馆': 'data/hunan_museum.xlsx',
+            }
+            file_path = default_files.get(museum.name)
+            if not file_path or not os.path.exists(file_path):
+                flash(f'未找到 {museum.name} 的默认文件，请手动上传', 'warning')
+                return redirect(request.url)
 
-        df = pd.read_excel(file_path)
+        # ============ 读取并导入数据 ============
+        try:
+            df = pd.read_excel(file_path)
+        except Exception as e:
+            flash(f'读取文件失败：{str(e)}', 'error')
+            return redirect(request.url)
+
         count = 0
         for _, row in df.iterrows():
-            # 处理类别
-            category_name = row['Category'] if 'Category' in row else '未知类别'
-            if pd.isna(category_name):
-                category_name = '未知类别'
-            category = Category.query.filter_by(name=category_name).first() or Category(name=category_name)
+            try:
+                # ========== 处理关联字段（自动创建或复用）==========
 
-            # 处理朝代
-            dynasty_name = row['Dynasty'] if 'Dynasty' in row else '未知朝代'
-            if pd.isna(dynasty_name):
-                dynasty_name = '未知朝代'
-            dynasty = Dynasty.query.filter_by(name=dynasty_name).first() or Dynasty(name=dynasty_name)
+                category_name = row.get('Category', '未知类别')
+                if pd.isna(category_name):
+                    category_name = '未知类别'
+                category = Category.query.filter_by(name=category_name).first() or Category(name=category_name)
 
-            # 处理图片
-            image_url = row['Image'] if 'Image' in row and pd.notna(row['Image']) else None
-            image = Image(url=image_url) if image_url else None
+                dynasty_name = row.get('Dynasty', '未知朝代')
+                if pd.isna(dynasty_name):
+                    dynasty_name = '未知朝代'
+                dynasty = Dynasty.query.filter_by(name=dynasty_name).first() or Dynasty(name=dynasty_name)
 
-            # 北京特有
-            number = row['Number'] if 'Number' in row and pd.notna(row['Number']) else None
+                image_url = row.get('Image') if pd.notna(row.get('Image')) else None
+                image = Image.query.filter_by(url=image_url).first() or (Image(url=image_url) if image_url else None)
 
-            # 台北特有
-            description = row['Description'] if 'Description' in row and pd.notna(row['Description']) else None
+                motif_name = row.get('MotifAndPattern') if pd.notna(row.get('MotifAndPattern')) else None
+                motif = MotifAndPattern.query.filter_by(name=motif_name).first() or (MotifAndPattern(name=motif_name) if motif_name else None)
 
-            db.session.add_all([category, dynasty])
-            if image:
-                db.session.add(image)
-            db.session.commit()
+                obj_type_name = row.get('ObjectType') if pd.notna(row.get('ObjectType')) else None
+                obj_type = ObjectType.query.filter_by(name=obj_type_name).first() or (ObjectType(name=obj_type_name) if obj_type_name else None)
 
-            if form.type.data == 'beijing':
-                artifact = ArtifactBeijing(
+                form_struct_name = row.get('FormAndStructure') if pd.notna(row.get('FormAndStructure')) else None
+                form_struct = FormAndStructure.query.filter_by(name=form_struct_name).first() or (FormAndStructure(name=form_struct_name) if form_struct_name else None)
+
+                # ========== 特殊字段 ==========
+                description = row.get('Description') if pd.notna(row.get('Description')) else None
+
+                # ========== 添加到会话 ==========
+                db.session.add_all([category, dynasty])
+                if image: db.session.add(image)
+                if motif: db.session.add(motif)
+                if obj_type: db.session.add(obj_type)
+                if form_struct: db.session.add(form_struct)
+
+                # ========== 创建 Artifact ==========
+                artifact = Artifact(
+                    museum_id=museum.id,
                     name=row['Name'],
-                    category_id=category.id,
-                    number=number,
-                    dynasty_id=dynasty.id,
-                    image_id=image.id if image else None
-                )
-            else:
-                artifact = ArtifactTaipei(
-                    name=row['Name'],
-                    category_id=category.id,
-                    dynasty_id=dynasty.id,
                     description=description,
-                    image_id=image.id if image else None
+                    category_id=category.id,
+                    dynasty_id=dynasty.id,
+                    image_id=image.id if image else None,
+                    motif_id=motif.id if motif else None,
+                    object_type_id=obj_type.id if obj_type else None,
+                    form_structure_id=form_struct.id if form_struct else None
                 )
-            db.session.add(artifact)
-            db.session.commit()
-            count += 1
 
-        flash(f'成功导入 {count} 条{ "北京" if form.type.data == "beijing" else "台北" }文物', 'success')
-        _add_log('Import', f'csv_import_{form.type.data}')
-        return redirect(url_for('index'))
+                db.session.add(artifact)
+                count += 1
+                if(count%50==0): db.session.commit()
+
+            except Exception as e:
+                db.session.rollback()
+                flash(f'导入第 {count+1} 行失败：{str(e)}', 'warning')
+                continue
+
+        db.session.commit()
+        flash(f'成功为【{museum.name}】导入 {count} 条文物', 'success')
+        return redirect(url_for('artifacts', museum_id=museum.id))
+
     return render_template('import.html', form=form)
 
 # ==============================
@@ -713,18 +737,62 @@ def _create_or_get_associated_records(form):
         img = Image.query.filter_by(url=form.image_url.data).first() or Image(url=form.image_url.data)
         db.session.add(img)
     if form.motif.data:
-        m = MotifAndPattern.query.filter_by(name=form.motif.data).first() or MotifAndPattern(name=form.motif.data, description='')
+        m = MotifAndPattern.query.filter_by(name=form.motif.data).first() or MotifAndPattern(name=form.motif.data)
         db.session.add(m)
     if form.object_type.data:
-        o = ObjectType.query.filter_by(name=form.object_type.data).first() or ObjectType(name=form.object_type.data, description='')
+        o = ObjectType.query.filter_by(name=form.object_type.data).first() or ObjectType(name=form.object_type.data)
         db.session.add(o)
     if form.form_structure.data:
-        f = FormAndStructure.query.filter_by(name=form.form_structure.data).first() or FormAndStructure(name=form.form_structure.data, description='')
+        f = FormAndStructure.query.filter_by(name=form.form_structure.data).first() or FormAndStructure(name=form.form_structure.data)
         db.session.add(f)
     db.session.commit()
 
-def _add_log(table_name, action):
-    """统一添加操作日志"""
-    log = Log(table_name=table_name, action=action, user_id=current_user.id)
+from sqlalchemy.event import listens_for
+from flask_login import current_user
+from datetime import datetime
+
+# ==============================
+# 添加操作日志
+# ==============================
+
+@listens_for(db.session, 'before_flush')
+def before_flush(session, flush_context, instances):
+    models = {Artifact, Museum, Category, Dynasty, Image, 
+                      MotifAndPattern, ObjectType, FormAndStructure, User}
+
+    for instance in session.new:  
+        if type(instance) in models:
+            _auto_log(
+                table_name=type(instance).__name__,
+                record_id=instance.id,
+                action='create'
+            )
+
+    for instance in session.dirty:  # 修改
+        if type(instance) in models and session.is_modified(instance):
+            _auto_log(
+                table_name=type(instance).__name__,
+                record_id=instance.id,
+                action='update'
+            )
+
+    for instance in session.deleted:  # 删除
+        if type(instance) in models:
+            _auto_log(
+                table_name=type(instance).__name__,
+                record_id=instance.id,
+                action='delete'
+            )
+
+def _auto_log(table_name: str, record_id: int, action: str):
+
+    user_id = current_user.id if current_user.is_authenticated else None
+
+    log = Log(
+        table_name=table_name,
+        record_id=record_id,
+        action=action[:255], 
+        user_id=user_id,
+        timestamp=datetime.utcnow()
+    )
     db.session.add(log)
-    db.session.commit()

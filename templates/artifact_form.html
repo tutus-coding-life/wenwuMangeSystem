@@ -1,41 +1,48 @@
 {% extends "base.html" %}
+
 {% block title %}{{ title }}{% endblock %}
+
 {% block content %}
 <h2>{{ title }}</h2>
-<div class="card">
+
+<div class="card shadow-sm">
     <div class="card-body">
         <form method="post">
             {{ form.hidden_tag() }}
+
             <div class="row">
                 <div class="col-md-6 mb-3">
                     {{ form.name.label(class="form-label") }}
-                    {{ form.name(class="form-control") }}
+                    {{ form.name(class="form-control", placeholder="请输入文物名称") }}
+                    {% if form.name.errors %}
+                        <div class="text-danger small mt-1">{{ form.name.errors|join(', ') }}</div>
+                    {% endif %}
                 </div>
+
                 <div class="col-md-6 mb-3">
                     {{ form.category.label(class="form-label") }}
                     {{ form.category(class="form-control") }}
                 </div>
             </div>
-            {% if form.number is defined %}  <!-- 北京专用 -->
+
+
             <div class="mb-3">
-                {{ form.number.label(class="form-label") }}
-                {{ form.number(class="form-control") }}
+                {{ form.description.label(class="form-label") }}
+                {{ form.description(class="form-control", rows=5, placeholder="请输入文物详细描述（可选）") }}
+                <div class="form-text">详细说明、历史背景等，可不填</div>
             </div>
-            {% endif %}
+
             <div class="mb-3">
                 {{ form.dynasty.label(class="form-label") }}
                 {{ form.dynasty(class="form-control") }}
             </div>
-            {% if form.description is defined %}  <!-- 台北专用 -->
-            <div class="mb-3">
-                {{ form.description.label(class="form-label") }}
-                {{ form.description(class="form-control", rows=4) }}
-            </div>
-            {% endif %}
+
             <div class="mb-3">
                 {{ form.image_url.label(class="form-label") }}
-                {{ form.image_url(class="form-control", placeholder="http://example.com/image.jpg") }}
+                {{ form.image_url(class="form-control", placeholder="https://example.com/image.jpg") }}
+                <div class="form-text">输入图片完整URL，支持 JPG、PNG 等格式（可选）</div>
             </div>
+
             <div class="row">
                 <div class="col-md-4 mb-3">
                     {{ form.motif.label(class="form-label") }}
@@ -50,9 +57,13 @@
                     {{ form.form_structure(class="form-control") }}
                 </div>
             </div>
-            <div class="text-center">
-                {{ form.submit(class="btn btn-primary btn-lg") }}
-                <a href="{{ url_for('artifacts_beijing' if '北京' in title else 'artifacts_taipei') }}" class="btn btn-secondary btn-lg ms-3">取消</a>
+
+            <div class="text-center mt-4">
+                {{ form.submit(class="btn btn-primary btn-lg px-5") }}
+                <a href="{{ url_for('artifacts', museum_id=museum.id) }}"
+                   class="btn btn-secondary btn-lg px-5 ms-3">
+                    取消
+                </a>
             </div>
         </form>
     </div>

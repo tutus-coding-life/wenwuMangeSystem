@@ -1,85 +1,182 @@
 <!DOCTYPE html>
 <html lang="zh">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>{% block title %}文物管理系统{% endblock %}</title>
     <!-- Bootstrap 5 CSS -->
-    <link rel="stylesheet" href="{{ url_for('static', filename='bootstrap/css/bootstrap.min.css') }}">
+    <link
+      rel="stylesheet"
+      href="{{ url_for('static', filename='bootstrap/css/bootstrap.min.css') }}"
+    />
     <style>
-        body { padding-top: 70px; }
-        .navbar-brand { font-weight: bold; }
-        footer { margin-top: 50px; padding: 20px 0; background-color: #f8f9fa; }
+      body {
+        padding-top: 70px;
+      }
+      .navbar-brand {
+        font-weight: bold;
+      }
+      footer {
+        margin-top: 50px;
+        padding: 20px 0;
+        background-color: #f8f9fa;
+      }
     </style>
-</head>
-<body>
+  </head>
+  <body>
     <!-- 导航栏 -->
     <nav class="navbar navbar-expand-lg navbar-dark bg-primary fixed-top">
-        <div class="container">
-            <a class="navbar-brand" href="{{ url_for('index') }}">故宫文物管理系统</a>
-            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
-                <span class="navbar-toggler-icon"></span>
-            </button>
-            <div class="collapse navbar-collapse" id="navbarNav">
-                <ul class="navbar-nav me-auto">
-                    <li class="nav-item"><a class="nav-link" href="{{ url_for('artifacts_beijing') }}">北京故宫文物</a></li>
-                    <li class="nav-item"><a class="nav-link" href="{{ url_for('artifacts_taipei') }}">台北故宫文物</a></li>
-                    <li class="nav-item"><a class="nav-link" href="{{ url_for('categories') }}">类别管理</a></li>
-                    <li class="nav-item"><a class="nav-link" href="{{ url_for('dynasties') }}">朝代管理</a></li>
-                    <li class="nav-item"><a class="nav-link" href="{{ url_for('labels_motif') }}">图案标签</a></li>
-
-                    {% if current_user.is_authenticated and current_user.role == 'admin' %}
-                        <li class="nav-item dropdown">
-                            <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
-                                管理员功能
-                            </a>
-                            <ul class="dropdown-menu">
-                                <li><a class="dropdown-item" href="{{ url_for('users') }}">用户管理</a></li>
-                                <li><a class="dropdown-item" href="{{ url_for('import_data') }}">导入CSV数据</a></li>
-                                <li><a class="dropdown-item" href="{{ url_for('logs') }}">操作日志</a></li>
-                            </ul>
-                        </li>
-                    {% endif %}
-                </ul>
-                <ul class="navbar-nav">
-                    {% if current_user.is_authenticated %}
-                        <li class="nav-item"><span class="nav-link">欢迎，{{ current_user.username }} ({{ '管理员' if current_user.role == 'admin' else '游客' }})</span></li>
-                        <li class="nav-item"><a class="nav-link" href="{{ url_for('edit_profile') }}">修改密码</a></li>
-                        <li class="nav-item"><a class="nav-link" href="{{ url_for('logout') }}">注销</a></li>
-                    {% else %}
-                        <li class="nav-item"><a class="nav-link" href="{{ url_for('login') }}">登录</a></li>
-                        <li class="nav-item"><a class="nav-link" href="{{ url_for('register') }}">注册</a></li>
-                    {% endif %}
-                </ul>
-            </div>
+      <div class="container">
+        <a class="navbar-brand" href="{{ url_for('index') }}"
+          >故宫文物管理系统</a
+        >
+        <button
+          class="navbar-toggler"
+          type="button"
+          data-bs-toggle="collapse"
+          data-bs-target="#navbarNav"
+        >
+          <span class="navbar-toggler-icon"></span>
+        </button>
+        <div class="collapse navbar-collapse" id="navbarNav">
+          <ul class="navbar-nav me-auto">
+            <li class="nav-item dropdown">
+              <a
+                class="nav-link dropdown-toggle"
+                href="#"
+                role="button"
+                data-bs-toggle="dropdown"
+              >
+                数字文物库
+              </a>
+              <ul class="dropdown-menu">
+                {% for museum in museums %}
+                <li>
+                  <a
+                    class="dropdown-item"
+                    href="{{ url_for('artifacts', museum_id=museum.id) }}"
+                  >
+                    {{ museum.name }}
+                  </a>
+                </li>
+                {% endfor %}
+              </ul>
+            </li>
+            {% if current_user.is_authenticated and current_user.role == 'admin'
+            %}
+            <li class="nav-item dropdown">
+              <a
+                class="nav-link dropdown-toggle"
+                href="#"
+                role="button"
+                data-bs-toggle="dropdown"
+              >
+                管理员功能
+              </a>
+              <ul class="dropdown-menu">
+                <li>
+                  <a class="dropdown-item" href="{{ url_for('categories') }}"
+                    >类别管理</a
+                  >
+                </li>
+                <li>
+                  <a class="dropdown-item" href="{{ url_for('dynasties') }}"
+                    >朝代管理</a
+                  >
+                </li>
+                <li>
+                  <a class="dropdown-item" href="{{ url_for('labels_motif') }}"
+                    >图案标签</a
+                  >
+                </li>
+                <li>
+                  <a
+                    class="dropdown-item"
+                    href="{{ url_for('labels_object_type') }}"
+                    >对象类型</a
+                  >
+                </li>
+                <li>
+                  <a
+                    class="dropdown-item"
+                    href="{{ url_for('labels_form_structure') }}"
+                    >形式结构</a
+                  >
+                </li>
+                <li>
+                  <a class="dropdown-item" href="{{ url_for('users') }}"
+                    >用户管理</a
+                  >
+                </li>
+                <li>
+                  <a class="dropdown-item" href="{{ url_for('import_data') }}"
+                    >批量导入文物数据</a
+                  >
+                </li>
+                <li>
+                  <a class="dropdown-item" href="{{ url_for('logs') }}"
+                    >操作日志</a
+                  >
+                </li>
+              </ul>
+            </li>
+            {% endif %}
+          </ul>
+          <ul class="navbar-nav">
+            {% if current_user.is_authenticated %}
+            <li class="nav-item">
+              <span class="nav-link"
+                >欢迎，{{ current_user.username }} ({{ '管理员' if
+                current_user.role == 'admin' else '游客' }})</span
+              >
+            </li>
+            <li class="nav-item">
+              <a class="nav-link" href="{{ url_for('edit_profile') }}"
+                >修改密码</a
+              >
+            </li>
+            <li class="nav-item">
+              <a class="nav-link" href="{{ url_for('logout') }}">注销</a>
+            </li>
+            {% else %}
+            <li class="nav-item">
+              <a class="nav-link" href="{{ url_for('login') }}">登录</a>
+            </li>
+            <li class="nav-item">
+              <a class="nav-link" href="{{ url_for('register') }}">注册</a>
+            </li>
+            {% endif %}
+          </ul>
         </div>
+      </div>
     </nav>
 
     <!-- 主内容区域 -->
     <div class="container mt-4">
-        <!-- 闪现消息（成功/错误提示） -->
-        {% with messages = get_flashed_messages(with_categories=true) %}
-            {% if messages %}
-                {% for category, message in messages %}
-                    <div class="alert alert-{{ 'danger' if category == 'error' else 'success' }} alert-dismissible fade show">
-                        {{ message }}
-                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-                    </div>
-                {% endfor %}
-            {% endif %}
-        {% endwith %}
-
-        {% block content %}{% endblock %}
+      <!-- 闪现消息（成功/错误提示） -->
+      {% with messages = get_flashed_messages(with_categories=true) %} {% if
+      messages %} {% for category, message in messages %}
+      <div
+        class="alert alert-{{ 'danger' if category == 'error' else 'success' }} alert-dismissible fade show"
+      >
+        {{ message }}
+        <button
+          type="button"
+          class="btn-close"
+          data-bs-dismiss="alert"
+        ></button>
+      </div>
+      {% endfor %} {% endif %} {% endwith %} {% block content %}{% endblock %}
     </div>
 
     <!-- Footer -->
     <footer class="text-center text-muted">
-        <div class="container">
-            <small>&copy; 2025 故宫文物管理系统 · 基于 Flask + MySQL 开发</small>
-        </div>
+      <div class="container">
+        <small>&copy; 2025 文物管理系统 · 基于 Flask + MySQL 开发</small>
+      </div>
     </footer>
 
     <!-- Bootstrap 5 JS -->
     <script src="{{ url_for('static', filename='bootstrap/js/bootstrap.bundle.min.js') }}"></script>
-</body>
+  </body>
 </html>

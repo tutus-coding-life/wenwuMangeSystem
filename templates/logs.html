@@ -1,27 +1,83 @@
 {% extends "base.html" %}
+
 {% block title %}操作日志{% endblock %}
+
 {% block content %}
-<h2>操作日志</h2>
-<table class="table table-striped table-sm">
-    <thead>
-        <tr>
-            <th>ID</th>
-            <th>操作表</th>
-            <th>操作类型</th>
-            <th>时间</th>
-            <th>操作用户ID</th>
-        </tr>
-    </thead>
-    <tbody>
-        {% for log in logs %}
-        <tr>
-            <td>{{ log.id }}</td>
-            <td>{{ log.table_name }}</td>
-            <td>{{ log.action }}</td>
-            <td>{{ log.timestamp.strftime('%Y-%m-%d %H:%M:%S') }}</td>
-            <td>{{ log.user_id }}</td>
-        </tr>
-        {% endfor %}
-    </tbody>
-</table>
+<div class="container my-4">
+    <h2 class="mb-4">
+        操作日志
+        <small class="text-muted fs-6">共 {{ logs|length }} 条记录</small>
+    </h2>
+
+    <div class="card shadow-sm">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-striped table-hover mb-0 align-middle">
+                    <thead class="table">
+                        <tr>
+                            <th scope="col">#</th>
+                            <th scope="col">操作表</th>
+                            <th scope="col">记录ID</th>
+                            <th scope="col">操作类型</th>
+                            <th scope="col">操作用户</th>
+                            <th scope="col">操作时间</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% if logs %}
+                            {% for log in logs %}
+                            <tr>
+                                <td>{{ log.id }}</td>
+                                <td>
+                                    <span class="badge bg-secondary rounded-pill">{{ log.table_name }}</span>
+                                </td>
+                                <td>
+                                    {% if log.record_id %}
+                                        <code>#{{ log.record_id }}</code>
+                                    {% else %}
+                                        <span class="text-muted">—</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% set action_lower = log.action.lower() %}
+                                    {% if 'create' in action_lower or '新增' in log.action %}
+                                        <span class="badge bg-success">新增</span>
+                                    {% elif 'update' in action_lower or '修改' in log.action %}
+                                        <span class="badge bg-warning text-dark">修改</span>
+                                    {% elif 'delete' in action_lower or '删除' in log.action %}
+                                        <span class="badge bg-danger">删除</span>
+                                    {% elif 'import' in action_lower %}
+                                        <span class="badge bg-info text-dark">批量导入</span>
+                                    {% else %}
+                                        <span class="badge bg-primary">{{ log.action }}</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if log.user %}
+                                        <strong>{{ log.user.username }}</strong>
+                                        <small class="text-muted">(ID: {{ log.user_id }})</small>
+                                    {% else %}
+                                        <em class="text-muted">未知用户</em>
+                                        <small>(ID: {{ log.user_id or '无' }})</small>
+                                    {% endif %}
+                                </td>
+                                <td title="{{ log.timestamp }}">
+                                    {{ log.timestamp.strftime('%Y-%m-%d %H:%M:%S') }}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        {% else %}
+                            <tr>
+                                <td colspan="6" class="text-center py-5 text-muted">
+                                    <i class="bi bi-journal-text fs-1"></i><br><br>
+                                    暂无操作日志记录
+                                </td>
+                            </tr>
+                        {% endif %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
 {% endblock %}
