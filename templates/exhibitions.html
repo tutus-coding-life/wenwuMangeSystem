@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+
+{% block title %}展览列表{% endblock %}
+
+{% block content %}
+<h2>展览</h2>
+{% if current_user.role == 'admin' %}
+<a href="{{ url_for('add_exhibition') }}" class="btn btn-success mb-3">添加展览</a>
+{% endif %}
+<table class="table table-striped">
+  <thead>
+    <tr>
+      <th>ID</th>
+      <th>名称</th>
+      <th>起止日期</th>
+      {% if current_user.role == 'admin' %}
+      <th>操作</th>
+      {% endif %}
+    </tr>
+  </thead>
+  <tbody>
+    {% for item in items %}
+    <tr>
+      <td>{{ item.id }}</td>
+      <td><a href="{{ url_for('exhibition_view', id=item.id) }}">{{ item.name }}</a></td>
+      <td>{{ item.start_date or '—' }} 至 {{ item.end_date or '—' }}</td>
+      {% if current_user.role == 'admin' %}
+      <td>
+        <a href="{{ url_for('edit_exhibition', id=item.id) }}" class="btn btn-sm btn-warning">修改</a>
+        <a href="{{ url_for('admin_exhibition_view', id=item.id) }}" class="btn btn-sm btn-info">管理藏品</a>
+        <form action="{{ url_for('delete_exhibition', id=item.id) }}" method="post" style="display:inline;">
+          <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('确定删除？')">删除</button>
+        </form>
+      </td>
+      {% endif %}
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% if pagination and pagination.pages > 1 %}
+<nav class="mt-3">
+  <ul class="pagination">
+    {% if pagination.has_prev %}
+    <li class="page-item"><a class="page-link" href="{% if current_user.role == 'admin' %}{{ url_for('admin_exhibitions', page=pagination.prev_num) }}{% else %}{{ url_for('exhibitions', page=pagination.prev_num) }}{% endif %}">上一页</a></li>
+    {% endif %}
+    {% for p in pagination.iter_pages(left_edge=2, left_current=2, right_current=2, right_edge=2) %}
+      {% if p %}
+        {% if p != pagination.page %}
+        <li class="page-item"><a class="page-link" href="{% if current_user.role == 'admin' %}{{ url_for('admin_exhibitions', page=p) }}{% else %}{{ url_for('exhibitions', page=p) }}{% endif %}">{{ p }}</a></li>
+        {% else %}
+        <li class="page-item active"><span class="page-link">{{ p }}</span></li>
+        {% endif %}
+      {% else %}
+        <li class="page-item disabled"><span class="page-link">…</span></li>
+      {% endif %}
+    {% endfor %}
+    {% if pagination.has_next %}
+    <li class="page-item"><a class="page-link" href="{% if current_user.role == 'admin' %}{{ url_for('admin_exhibitions', page=pagination.next_num) }}{% else %}{{ url_for('exhibitions', page=pagination.next_num) }}{% endif %}">下一页</a></li>
+    {% endif %}
+  </ul>
+</nav>
+{% endif %}
+{% endblock %}

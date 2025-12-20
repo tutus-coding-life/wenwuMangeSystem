@@ -26,6 +26,11 @@
           {{ item.storage_room.position }}
         {% elif item.type == 'exhibition' and item.exhibition_hall %}
           {{ item.exhibition_hall.position }}
+        {% elif item.type == 'both' %}
+          {% set parts = [] %}
+          {% if item.storage_room %}{% set _ = parts.append(item.storage_room.position) %}{% endif %}
+          {% if item.exhibition_hall %}{% set _ = parts.append(item.exhibition_hall.position) %}{% endif %}
+          {{ parts|join(' / ') if parts else '—' }}
         {% else %}
           —
         {% endif %}

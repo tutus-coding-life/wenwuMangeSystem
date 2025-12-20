@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+
+{% block title %}编辑展览藏品关联{% endblock %}
+
+{% block content %}
+<h2>编辑展览藏品关联</h2>
+<form method="post">
+  {{ form.hidden_tag() }}
+  <div class="mb-3">
+    {{ form.artifact_id.label(class='form-label') }}
+    {{ form.artifact_id(class='form-select') }}
+  </div>
+  {{ form.submit(class='btn btn-primary') }}
+  <a href="{{ url_for('admin_exhibition_view', id=exhibition_id) }}" class="btn btn-secondary">取消</a>
+</form>
+{% endblock %}

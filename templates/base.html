@@ -62,6 +62,9 @@
                 {% endfor %}
               </ul>
             </li>
+            <li class="nav-item">
+              <a class="nav-link" href="{{ url_for('exhibitions') }}">展览</a>
+            </li>
             {% if current_user.is_authenticated and current_user.role == 'admin'
             %}
             <li class="nav-item dropdown">
@@ -111,6 +114,9 @@
                 </li>
                 <li>
                   <a class="dropdown-item" href="{{ url_for('locations') }}">位置管理</a>
+                </li>
+                <li>
+                  <a class="dropdown-item" href="{{ url_for('admin_exhibitions') }}">展览管理</a>
                 </li>
                 <li>
                   <a class="dropdown-item" href="{{ url_for('users') }}"

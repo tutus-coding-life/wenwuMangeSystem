@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+
+{% block title %}管理展览 - {{ exhibition.name }}{% endblock %}
+
+{% block content %}
+<h2>管理展览：{{ exhibition.name }}</h2>
+<p class="text-muted">{{ exhibition.start_date or '—' }} 至 {{ exhibition.end_date or '—' }}</p>
+{% if exhibition.description %}
+<div class="mb-3">{{ exhibition.description }}</div>
+{% endif %}
+
+<hr>
+<h4>展览藏品列表</h4>
+<table class="table">
+  <thead>
+    <tr>
+      <th>链接ID</th>
+      <th>文物ID</th>
+      <th>文物名称</th>
+      <th>操作</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for link in links %}
+    <tr>
+      <td>{{ link.id }}</td>
+      <td>{{ link.artifact.id }}</td>
+      <td>{{ link.artifact.name }}</td>
+      <td>
+        <a href="{{ url_for('edit_artifact_link', exhibition_id=exhibition.id, link_id=link.id) }}" class="btn btn-sm btn-warning">编辑</a>
+        <form action="{{ url_for('remove_artifact_from_exhibition', exhibition_id=exhibition.id, link_id=link.id) }}" method="post" style="display:inline;">
+          <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('确定移除该文物吗？')">移除</button>
+        </form>
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+<hr>
+<h4>将文物添加到该展览</h4>
+<form action="{{ url_for('add_artifact_to_exhibition', id=exhibition.id) }}" method="post">
+  {{ add_form.hidden_tag() }}
+  <div class="row g-3 align-items-end">
+    <div class="col-md-8">{{ add_form.artifact_id(class='form-select') }}</div>
+    <div class="col-md-4">{{ add_form.submit(class='btn btn-primary') }}</div>
+  </div>
+</form>
+
+<a href="{{ url_for('admin_exhibitions') }}" class="btn btn-secondary mt-3">返回展览列表</a>
+{% endblock %}

@@ -8,10 +8,12 @@ from models import (
     MotifAndPattern, ObjectType, FormAndStructure,
     StorageRoom, ExhibitionHall, Location
 )
+from models import Exhibition, ExhibitionArtifact
 from forms import (
     RegisterForm, LoginForm, EditProfileForm, UserForm,
     ArtifactForm,  LabelForm, ImportForm, LocationForm
 )
+from forms import ExhibitionForm, ExhibitionAddArtifactForm
 import pandas as pd
 import os
 
@@ -190,12 +192,16 @@ def add_artifact(museum_id):
                         db.session.add(eh)
                         db.session.flush()
                     eh_id = eh.id
-                # 创建 Location，type 根据填写情况设置
+                # 创建或复用 Location，type 根据填写情况设置
                 loc_type = 'both' if sr_id and eh_id else ('storage' if sr_id else 'exhibition')
-                loc = Location(storage_room_id=sr_id, exhibition_hall_id=eh_id, type=loc_type)
-                db.session.add(loc)
-                db.session.flush()
-                chosen_location_id = loc.id
+                existing_loc = Location.query.filter_by(type=loc_type, storage_room_id=sr_id, exhibition_hall_id=eh_id).first()
+                if existing_loc:
+                    chosen_location_id = existing_loc.id
+                else:
+                    loc = Location(storage_room_id=sr_id, exhibition_hall_id=eh_id, type=loc_type)
+                    db.session.add(loc)
+                    db.session.flush()
+                    chosen_location_id = loc.id
 
         # 创建通用 Artifact 实例
         artifact = Artifact(
@@ -283,10 +289,14 @@ def edit_artifact(museum_id, id):
                         db.session.flush()
                     eh_id = eh.id
                 loc_type = 'both' if sr_id and eh_id else ('storage' if sr_id else 'exhibition')
-                loc = Location(storage_room_id=sr_id, exhibition_hall_id=eh_id, type=loc_type)
-                db.session.add(loc)
-                db.session.flush()
-                chosen_location_id = loc.id
+                existing_loc = Location.query.filter_by(type=loc_type, storage_room_id=sr_id, exhibition_hall_id=eh_id).first()
+                if existing_loc:
+                    chosen_location_id = existing_loc.id
+                else:
+                    loc = Location(storage_room_id=sr_id, exhibition_hall_id=eh_id, type=loc_type)
+                    db.session.add(loc)
+                    db.session.flush()
+                    chosen_location_id = loc.id
 
         # 更新字段
         artifact.name = form.name.data
@@ -547,6 +557,232 @@ def edit_form_structure(id):
         return redirect(url_for('labels_form_structure'))
     return render_template('label_form.html', form=form, title='修改形式结构')
 
+
+# ==============================
+# 展览功能
+# ==============================
+
+@app.route('/exhibitions')
+@login_required
+def exhibitions():
+    page = request.args.get('page', 1, type=int)
+    exhibitions = Exhibition.query.paginate(page=page, per_page=10)
+    exhibition_data = []
+
+    for exhibition in exhibitions.items:
+        artifacts = (
+            Artifact.query
+            .join(ExhibitionArtifact, Artifact.id == ExhibitionArtifact.artifact_id)
+            .filter(ExhibitionArtifact.exhibition_id == exhibition.id)
+            .all()
+        )
+        exhibition_data.append({
+            'exhibition': exhibition,
+            'artifacts': artifacts
+        })
+
+    return render_template('exhibition_view.html', exhibitions=exhibition_data, pagination=exhibitions)
+
+
+@app.route('/exhibition/<int:id>')
+@login_required
+def exhibition_view(id):
+    ex = Exhibition.query.get_or_404(id)
+
+    # 筛选参数（与文物列表类似）
+    page = request.args.get('page', 1, type=int)
+    category_id = request.args.get('category', type=int)
+    dynasty_id = request.args.get('dynasty', type=int)
+    motif_id = request.args.get('motif', type=int)
+    object_type_id = request.args.get('object_type', type=int)
+    form_structure_id = request.args.get('form_structure', type=int)
+    name_q = request.args.get('q', type=str)
+
+    # 基础查询：展览关联的文物
+    base_q = Artifact.query.join(ExhibitionArtifact, ExhibitionArtifact.artifact_id == Artifact.id).filter(ExhibitionArtifact.exhibition_id == id)
+
+    if category_id:
+        base_q = base_q.filter(Artifact.category_id == category_id)
+    if dynasty_id:
+        base_q = base_q.filter(Artifact.dynasty_id == dynasty_id)
+    if motif_id:
+        base_q = base_q.filter(Artifact.motif_id == motif_id)
+    if object_type_id:
+        base_q = base_q.filter(Artifact.object_type_id == object_type_id)
+    if form_structure_id:
+        base_q = base_q.filter(Artifact.form_structure_id == form_structure_id)
+    if name_q:
+        base_q = base_q.filter(Artifact.name.ilike(f"%{name_q}%"))
+
+    base_q = base_q.order_by(Artifact.name)
+    pagination = base_q.paginate(page=page, per_page=21, error_out=False)
+    artifacts = pagination.items
+
+    # 用于筛选的筛选项（从该展览实际文物中收集）
+    all_links = ExhibitionArtifact.query.filter_by(exhibition_id=id).all()
+    exhibition_artifacts = [l.artifact for l in all_links]
+    # map artifact_id -> link id for removal actions (works when pagination applied)
+    link_map = {l.artifact_id: l.id for l in all_links}
+    categories = sorted({a.category for a in exhibition_artifacts if a.category}, key=lambda x: x.name)
+    dynasties = sorted({a.dynasty for a in exhibition_artifacts if a.dynasty}, key=lambda x: x.name)
+    motifs = sorted({a.motif for a in exhibition_artifacts if a.motif}, key=lambda x: x.name)
+    object_types = sorted({a.object_type for a in exhibition_artifacts if a.object_type}, key=lambda x: x.name)
+    form_structures = sorted({a.form_structure for a in exhibition_artifacts if a.form_structure}, key=lambda x: x.name)
+
+    add_form = None
+    if current_user.role == 'admin':
+        add_form = ExhibitionAddArtifactForm()
+
+    return render_template('exhibition_view.html', exhibition=ex, artifacts=artifacts, add_form=add_form, links=all_links, link_map=link_map,
+                           pagination=pagination,
+                           categories=categories, dynasties=dynasties, motifs=motifs, object_types=object_types, form_structures=form_structures,
+                           selected_category=category_id, selected_dynasty=dynasty_id, selected_motif=motif_id, selected_object_type=object_type_id, selected_form_structure=form_structure_id, q=name_q)
+
+
+@app.route('/admin/exhibitions')
+@login_required
+def admin_exhibitions():
+    if current_user.role != 'admin':
+        flash('无权限', 'error')
+        return redirect(url_for('index'))
+    page = request.args.get('page', 1, type=int)
+    pagination = Exhibition.query.order_by(Exhibition.start_date.desc(), Exhibition.name).paginate(page=page, per_page=10, error_out=False)
+    # pagination may return items as Exhibition objects
+    return render_template('exhibitions.html', items=pagination.items, pagination=pagination)
+
+
+@app.route('/admin/exhibition/<int:id>')
+@login_required
+def admin_exhibition_view(id):
+    if current_user.role != 'admin':
+        flash('无权限', 'error')
+        return redirect(url_for('index'))
+    exhibition = Exhibition.query.get_or_404(id)
+    # list all links for this exhibition
+    links = ExhibitionArtifact.query.filter_by(exhibition_id=id).all()
+    # load artifacts for display
+    artifacts = [link.artifact for link in links]
+    add_form = ExhibitionAddArtifactForm()
+    return render_template('admin_exhibition_view.html', exhibition=exhibition, links=links, artifacts=artifacts, add_form=add_form)
+
+
+@app.route('/admin/exhibition/<int:exhibition_id>/edit_artifact/<int:link_id>', methods=['GET', 'POST'])
+@login_required
+def edit_artifact_link(exhibition_id, link_id):
+    if current_user.role != 'admin':
+        flash('无权限', 'error')
+        return redirect(url_for('index'))
+    link = ExhibitionArtifact.query.get_or_404(link_id)
+    if link.exhibition_id != exhibition_id:
+        abort(400)
+    form = ExhibitionAddArtifactForm()
+    if request.method == 'GET':
+        form.artifact_id.data = link.artifact_id
+        return render_template('admin_edit_artifact_link.html', form=form, exhibition_id=exhibition_id, link=link)
+    if form.validate_on_submit():
+        new_aid = form.artifact_id.data
+        if new_aid == 0:
+            flash('请选择文物', 'warning')
+            return redirect(url_for('admin_exhibition_view', id=exhibition_id))
+        # ensure not duplicate
+        exists = ExhibitionArtifact.query.filter_by(exhibition_id=exhibition_id, artifact_id=new_aid).first()
+        if exists and exists.id != link.id:
+            flash('该文物已存在于展览中', 'info')
+            return redirect(url_for('admin_exhibition_view', id=exhibition_id))
+        link.artifact_id = new_aid
+        db.session.commit()
+        flash('展览藏品关联已更新', 'success')
+        return redirect(url_for('admin_exhibition_view', id=exhibition_id))
+    flash('无效请求', 'error')
+    return redirect(url_for('admin_exhibition_view', id=exhibition_id))
+
+
+@app.route('/admin/add_exhibition', methods=['GET', 'POST'])
+@login_required
+def add_exhibition():
+    if current_user.role != 'admin':
+        flash('无权限', 'error')
+        return redirect(url_for('index'))
+    form = ExhibitionForm()
+    if form.validate_on_submit():
+        ex = Exhibition(name=form.name.data, start_date=form.start_date.data or None, end_date=form.end_date.data or None, description=form.description.data)
+        db.session.add(ex)
+        db.session.commit()
+        flash('展览添加成功', 'success')
+        return redirect(url_for('admin_exhibitions'))
+    return render_template('exhibition_form.html', form=form, title='添加展览')
+
+
+@app.route('/admin/edit_exhibition/<int:id>', methods=['GET', 'POST'])
+@login_required
+def edit_exhibition(id):
+    if current_user.role != 'admin':
+        flash('无权限', 'error')
+        return redirect(url_for('index'))
+    ex = Exhibition.query.get_or_404(id)
+    form = ExhibitionForm(obj=ex)
+    if form.validate_on_submit():
+        ex.name = form.name.data
+        ex.start_date = form.start_date.data or None
+        ex.end_date = form.end_date.data or None
+        ex.description = form.description.data
+        db.session.commit()
+        flash('展览修改成功', 'success')
+        return redirect(url_for('admin_exhibitions'))
+    return render_template('exhibition_form.html', form=form, title='修改展览')
+
+
+@app.route('/admin/delete_exhibition/<int:id>', methods=['POST'])
+@login_required
+def delete_exhibition(id):
+    if current_user.role != 'admin':
+        flash('无权限', 'error')
+        return redirect(url_for('index'))
+    ex = Exhibition.query.get_or_404(id)
+    db.session.delete(ex)
+    db.session.commit()
+    flash('展览删除成功', 'success')
+    return redirect(url_for('admin_exhibitions'))
+
+
+@app.route('/admin/exhibition/<int:id>/add_artifact', methods=['POST'])
+@login_required
+def add_artifact_to_exhibition(id):
+    if current_user.role != 'admin':
+        flash('无权限', 'error')
+        return redirect(url_for('index'))
+    form = ExhibitionAddArtifactForm()
+    if form.validate_on_submit():
+        aid = form.artifact_id.data
+        if aid == 0:
+            flash('请选择要添加的文物', 'warning')
+            return redirect(url_for('exhibition_view', id=id))
+        # 避免重复
+        exist = ExhibitionArtifact.query.filter_by(exhibition_id=id, artifact_id=aid).first()
+        if exist:
+            flash('该文物已添加到展览', 'info')
+            return redirect(url_for('exhibition_view', id=id))
+        link = ExhibitionArtifact(exhibition_id=id, artifact_id=aid)
+        db.session.add(link)
+        db.session.commit()
+        flash('已将文物添加到展览', 'success')
+    else:
+        flash('无效请求', 'error')
+    return redirect(url_for('exhibition_view', id=id))
+
+
+@app.route('/admin/exhibition/<int:exhibition_id>/remove_artifact/<int:link_id>', methods=['POST'])
+@login_required
+def remove_artifact_from_exhibition(exhibition_id, link_id):
+    if current_user.role != 'admin':
+        flash('无权限', 'error')
+        return redirect(url_for('index'))
+    link = ExhibitionArtifact.query.get_or_404(link_id)
+    db.session.delete(link)
+    db.session.commit()
+    flash('已从展览中移除文物', 'success')
+    return redirect(url_for('exhibition_view', id=exhibition_id))
+
 @app.route('/admin/delete_form_structure/<int:id>', methods=['POST'])
 @login_required
 def delete_form_structure(id):
@@ -732,11 +968,17 @@ def add_location():
         return redirect(url_for('index'))
     form = LocationForm()
     if form.validate_on_submit():
-        loc = Location(
-            storage_room_id=(form.storage_room_id.data if form.storage_room_id.data and form.storage_room_id.data != 0 else None),
-            exhibition_hall_id=(form.exhibition_hall_id.data if form.exhibition_hall_id.data and form.exhibition_hall_id.data != 0 else None),
-            type=form.type.data
-        )
+        sr_id = (form.storage_room_id.data if form.storage_room_id.data and form.storage_room_id.data != 0 else None)
+        eh_id = (form.exhibition_hall_id.data if form.exhibition_hall_id.data and form.exhibition_hall_id.data != 0 else None)
+        loc_type = form.type.data
+
+        # 检查重复：同样的 type、sr_id、eh_id 不允许重复
+        exists = Location.query.filter_by(type=loc_type, storage_room_id=sr_id, exhibition_hall_id=eh_id).first()
+        if exists:
+            flash('该位置已存在，无法重复添加', 'warning')
+            return redirect(url_for('locations'))
+
+        loc = Location(storage_room_id=sr_id, exhibition_hall_id=eh_id, type=loc_type)
         db.session.add(loc)
         db.session.commit()
         flash('位置添加成功', 'success')
@@ -757,9 +999,19 @@ def edit_location(id):
         form.storage_room_id.data = loc.storage_room_id if loc.storage_room_id else 0
         form.exhibition_hall_id.data = loc.exhibition_hall_id if loc.exhibition_hall_id else 0
     if form.validate_on_submit():
-        loc.storage_room_id = (form.storage_room_id.data if form.storage_room_id.data and form.storage_room_id.data != 0 else None)
-        loc.exhibition_hall_id = (form.exhibition_hall_id.data if form.exhibition_hall_id.data and form.exhibition_hall_id.data != 0 else None)
-        loc.type = form.type.data
+        new_sr = (form.storage_room_id.data if form.storage_room_id.data and form.storage_room_id.data != 0 else None)
+        new_eh = (form.exhibition_hall_id.data if form.exhibition_hall_id.data and form.exhibition_hall_id.data != 0 else None)
+        new_type = form.type.data
+
+        # 检查是否存在与当前不同的重复记录
+        dup = Location.query.filter_by(type=new_type, storage_room_id=new_sr, exhibition_hall_id=new_eh).first()
+        if dup and dup.id != loc.id:
+            flash('相同的位置信息已存在，无法保存重复项', 'warning')
+            return redirect(url_for('locations'))
+
+        loc.storage_room_id = new_sr
+        loc.exhibition_hall_id = new_eh
+        loc.type = new_type
         db.session.commit()
         flash('位置修改成功', 'success')
         return redirect(url_for('locations'))

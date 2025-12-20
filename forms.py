@@ -2,6 +2,7 @@ from flask_wtf import FlaskForm
 from wtforms import StringField, PasswordField, SubmitField, TextAreaField, SelectField, FileField
 from wtforms.validators import DataRequired, Length, EqualTo, Optional
 from models import Museum, Location, StorageRoom, ExhibitionHall
+from models import Exhibition, ExhibitionArtifact, Artifact
 
 class RegisterForm(FlaskForm):
     username = StringField('用户名', validators=[DataRequired(), Length(min=4, max=64)])
@@ -71,7 +72,7 @@ class LabelForm(FlaskForm):
 class LocationForm(FlaskForm):
     storage_room_id = SelectField('库房', coerce=int, validators=[Optional()])
     exhibition_hall_id = SelectField('展厅', coerce=int, validators=[Optional()])
-    type = SelectField('类型', choices=[('', '请选择'), ('storage', '库房'), ('exhibition', '展厅')], validators=[DataRequired()])
+    type = SelectField('类型', choices=[('', '请选择'), ('storage', '库房'), ('exhibition', '展厅'), ('both', '库房+展厅')], validators=[DataRequired()])
     submit = SubmitField('保存')
 
     def __init__(self, *args, **kwargs):
@@ -118,3 +119,23 @@ class ImportForm(FlaskForm):
                 self.new_museum_name.errors.append('该博物馆名称已存在')
                 return False
         return True
+
+
+class ExhibitionForm(FlaskForm):
+    name = StringField('展览名称', validators=[DataRequired(), Length(max=256)])
+    start_date = StringField('开始日期', validators=[Optional()], description='YYYY-MM-DD')
+    end_date = StringField('结束日期', validators=[Optional()], description='YYYY-MM-DD')
+    description = TextAreaField('展览描述', validators=[Optional()])
+    submit = SubmitField('保存')
+
+
+class ExhibitionAddArtifactForm(FlaskForm):
+    artifact_id = SelectField('选择文物', coerce=int, validators=[DataRequired()])
+    submit = SubmitField('添加到展览')
+
+    def __init__(self, *args, **kwargs):
+        super(ExhibitionAddArtifactForm, self).__init__(*args, **kwargs)
+        choices = [(0, '请选择文物')]
+        for a in Artifact.query.order_by(Artifact.name).all():
+            choices.append((a.id, f"[{a.id}] {a.name}"))
+        self.artifact_id.choices = choices

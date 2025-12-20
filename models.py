@@ -87,6 +87,13 @@ class Location(db.Model):
             return f'<Location storage:{self.storage_room.position}>'
         if self.type == 'exhibition' and self.exhibition_hall:
             return f'<Location exhibition:{self.exhibition_hall.position}>'
+        if self.type == 'both':
+            parts = []
+            if self.storage_room:
+                parts.append(f'storage:{self.storage_room.position}')
+            if self.exhibition_hall:
+                parts.append(f'exhibition:{self.exhibition_hall.position}')
+            return f"<Location {'/'.join(parts)}>" if parts else f'<Location {self.id}>'
         return f'<Location {self.id}>'
 
 # ==================== 博物馆表 ====================
@@ -161,3 +168,39 @@ class Log(db.Model):
 
     def __repr__(self):
         return f'<Log {self.action} {self.table_name}#{self.record_id} by {self.user.username if self.user else "unknown"}>'
+
+
+# ==================== 展览相关表 ====================
+class Exhibition(db.Model):
+    __tablename__ = 'exhibition'
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(256), nullable=False)
+    start_date = db.Column(db.String(32))
+    end_date = db.Column(db.String(32))
+    description = db.Column(db.Text)
+
+    # 关系：通过 ExhibitionArtifact 关联到 Artifact
+    # 使用级联删除并启用 passive_deletes=True，让数据库的 ON DELETE CASCADE 生效，
+    # 避免 SQLAlchemy 在删除父记录时将外键字段设为 NULL（导致 NOT NULL 约束错误）。
+    exhibition_artifacts = db.relationship(
+        'ExhibitionArtifact',
+        backref='exhibition',
+        lazy='dynamic',
+        cascade='all, delete-orphan',
+        passive_deletes=True
+    )
+
+    def __repr__(self):
+        return f'<Exhibition {self.name}>'
+
+
+class ExhibitionArtifact(db.Model):
+    __tablename__ = 'exhibition_artifact'
+    id = db.Column(db.Integer, primary_key=True)
+    exhibition_id = db.Column(db.Integer, db.ForeignKey('exhibition.id', ondelete='CASCADE'), nullable=False)
+    artifact_id = db.Column(db.Integer, db.ForeignKey('artifact.id', ondelete='CASCADE'), nullable=False)
+
+    artifact = db.relationship('Artifact', backref='exhibition_links')
+
+    def __repr__(self):
+        return f'<ExhibitionArtifact ex:{self.exhibition_id} art:{self.artifact_id}>'

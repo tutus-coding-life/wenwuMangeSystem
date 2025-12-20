@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block content %}
+<h2>{{ title }}</h2>
+<form method="post">
+  {{ form.hidden_tag() }}
+  <div class="mb-3">
+    {{ form.name.label(class="form-label") }}
+    {{ form.name(class="form-control") }}
+  </div>
+  <div class="row">
+    <div class="col-md-6 mb-3">
+      {{ form.start_date.label(class="form-label") }}
+      {{ form.start_date(class="form-control", placeholder="YYYY-MM-DD") }}
+    </div>
+    <div class="col-md-6 mb-3">
+      {{ form.end_date.label(class="form-label") }}
+      {{ form.end_date(class="form-control", placeholder="YYYY-MM-DD") }}
+    </div>
+  </div>
+  <div class="mb-3">
+    {{ form.description.label(class="form-label") }}
+    {{ form.description(class="form-control", rows=4) }}
+  </div>
+  {{ form.submit(class="btn btn-primary") }}
+</form>
+{% endblock %}
