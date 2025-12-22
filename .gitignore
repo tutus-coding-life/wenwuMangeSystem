@@ -1,0 +1,6 @@
+migrations/
+__pycache__/
+venv/
+.offline_import.py 
+.env
+.
