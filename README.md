@@ -12,8 +12,13 @@ venv\Scripts\activate
 ```
 安装依赖：
 ```
-pip install -r requirement.txt
+pip install -r requirements.txt 
 ```
+或使用清华源安装
+ ```
+# 激活虚拟环境后，执行这条命令（自动用清华源安装）
+pip install -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple --trusted-host pypi.tuna.tsinghua.edu.cn --default-timeout=1000
+ ```
 设置flask环境变量
 ```
 set FLASK_APP=app.py
@@ -32,3 +37,5 @@ flask db upgrade
 ```
 flask run
 ```
+保持启动状态，然后打开浏览器访问http://localhost:5000/
+(可能是http://127.0.0.1:5000)
