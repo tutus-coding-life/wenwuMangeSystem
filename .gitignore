@@ -1,5 +1,5 @@
-migrations/
 __pycache__/
 venv/
+.env
 .offline_import.py 
 .gitignore
